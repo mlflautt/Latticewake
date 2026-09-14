@@ -7,6 +7,7 @@ typedef struct LWKernelRef LWKernelRef;
 LWKernelRef* lw_kernel_create(void);
 void lw_kernel_destroy(LWKernelRef* kernel);
 int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
+int lw_kernel_prepare_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);
 int lw_kernel_note_off(LWKernelRef* kernel, int note);
 int lw_kernel_render(LWKernelRef* kernel, float* output, unsigned int frames);

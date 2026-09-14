@@ -4,6 +4,7 @@
 #include <span>
 #include "../../../src/scene.cpp"
 #include "../../../src/terrain_evaluator.cpp"
+#include "../../../src/scene_serialization.cpp"
 #include "../../../src/realtime_kernel.cpp"
 
 struct LWKernelRef {
@@ -25,6 +26,7 @@ const char* latticewake_core_version(void) { return "portable-core-boundary-v0";
 LWKernelRef* lw_kernel_create(void) { return new (std::nothrow) LWKernelRef; }
 void lw_kernel_destroy(LWKernelRef* kernel) { delete kernel; }
 int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return kernel&&kernel->kernel.prepare(demoScene(),rate); }
+int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);return scene&&kernel->kernel.prepare(*scene,rate); }
 int lw_kernel_note_on(LWKernelRef* k,int n,float v) { if(!k||k->count==k->events.size())return 0;k->events[k->count++]={0,true,n,v};return 1; }
 int lw_kernel_note_off(LWKernelRef* k,int n) { if(!k||k->count==k->events.size())return 0;k->events[k->count++]={0,false,n,0};return 1; }
 int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) { if(!k||!out)return 0;const auto ok=k->kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(k->events.data(),k->count));k->count=0;return ok; }
