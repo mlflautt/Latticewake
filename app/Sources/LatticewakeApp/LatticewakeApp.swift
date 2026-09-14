@@ -19,7 +19,7 @@ struct ContentView: View {
       HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { audio.stop() } }
       Text("Play: A W S E D F T G Y H U J K").font(.caption)
       if !error.isEmpty { Text(error).foregroundStyle(.red) }
-    }.frame(minWidth: 420, minHeight: 260).padding().focusable().task {
+    }.frame(minWidth: 420, minHeight: 260).padding().contentShape(Rectangle()).gesture(DragGesture(minimumDistance: 0).onChanged { value in audio.expression(glide: value.location.x / 210 - 1, press: 0.7, slide: min(1, max(0, value.location.y / 260))) }).focusable().task {
       do {
         let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Latticewake", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
