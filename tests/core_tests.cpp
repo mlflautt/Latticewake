@@ -1,6 +1,7 @@
 #include "event_trace.hpp"
 #include "direct_play.hpp"
 #include "offline_terrain_voice.hpp"
+#include "mpe_state.hpp"
 #include "offline_oversampling.hpp"
 #include "proposals.hpp"
 #include "role_event_generator.hpp"
@@ -343,6 +344,7 @@ void testDirectPlayAndTerrainFrames() {
   assert(frame->points.size() == 5 && frame->points[2].value == repeated->points[2].value);
   assert(!buildTerrainFrame(scene, {0, 0.9, 0.1, 3}, error).has_value());
 }
+void testMpeState() { using namespace latticewake; MpeState lower({MpeMode::lower,1,2}); assert(!lower.noteOn(1,60)); assert(lower.noteOn(2,60)); assert(lower.expression(2,{0.2,0.3,0.4})); assert(lower.active(2)->expression.press==0.3); assert(!lower.noteOn(2,61)); assert(lower.noteOff(2,60)); MpeState upper({MpeMode::upper,16,2}); assert(upper.noteOn(15,62)); MpeState legacy({MpeMode::legacy,4,1}); assert(legacy.noteOn(4,64)); assert(!legacy.noteOn(5,64)); }
 
 }  // namespace
 
@@ -358,5 +360,6 @@ int main() {
   testOfflineOversamplingHarness();
   testFourRoleEventGeneration();
   testDirectPlayAndTerrainFrames();
+  testMpeState();
   return 0;
 }
