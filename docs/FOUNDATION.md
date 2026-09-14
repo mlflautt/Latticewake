@@ -53,6 +53,9 @@ The lanes can drive the internal terrain voice, external MIDI/MPE destinations,
 or both. They are functional inspiration from generative sequencers, not a
 copy of any specific product's UI or code.
 
+The current implementation emits deterministic, bounded offline traces for
+these lanes. It does not schedule audio, allocate voices, or send MIDI.
+
 MPE expression has three stable semantic inputs: `glide` (per-note pitch),
 `press` (per-note pressure), and `slide` (per-note timbre). QWERTY supplies
 note events; trackpad gestures are a low-rate source for these inputs and are

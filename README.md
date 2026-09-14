@@ -35,5 +35,8 @@ listening result.
 Sample-clock transport, preview-only proposals, and an offline 1x/2x/4x
 interpolation/decimation harness are also available as deterministic core
 building blocks, not as a live audio engine.
+The four role lanes now emit bounded offline traces; see the
+[real-time admission gate](docs/REALTIME_ADMISSION.md) before treating any
+core component as callback-safe.
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.

@@ -2,6 +2,7 @@
 #include "offline_terrain_voice.hpp"
 #include "offline_oversampling.hpp"
 #include "proposals.hpp"
+#include "role_event_generator.hpp"
 #include "sample_transport.hpp"
 #include "scene.hpp"
 #include "scene_serialization.hpp"
@@ -286,6 +287,36 @@ void testOfflineOversamplingHarness() {
   }
 }
 
+void testFourRoleEventGeneration() {
+  using namespace latticewake;
+  Scene scene = validScene();
+  scene.roles[1].enabled = false;
+  RoleEventGenerationError error;
+  const SampleTransportConfig transport{48000.0, 120.0};
+  const auto trace = generateRoleEvents(scene, 0, 48000, transport, error);
+  const auto repeated = generateRoleEvents(scene, 0, 48000, transport, error);
+  assert(trace.has_value() && repeated.has_value());
+  assert(!trace->events().empty());
+  assert(trace->canonicalBytes() == repeated->canonicalBytes());
+  assert(trace->validate().empty());
+  for (const auto& event : trace->events()) {
+    assert(event.origin == EventOrigin::generator);
+    assert(event.payload.at("lane") != "pad");
+  }
+
+  for (auto& role : scene.roles) role.enabled = false;
+  const auto silent = generateRoleEvents(scene, 0, 48000, transport, error);
+  assert(silent.has_value() && silent->events().empty());
+
+  scene = validScene();
+  for (auto& role : scene.roles) {
+    role.density = 1.0;
+    role.rhythm = {{RhythmStepKind::note}};
+  }
+  assert(!generateRoleEvents(scene, 0, 48000U * 1000U, transport, error).has_value());
+  assert(error.field == "events");
+}
+
 }  // namespace
 
 int main() {
@@ -298,5 +329,6 @@ int main() {
   testSampleClockTransport();
   testProposalPreviewBoundary();
   testOfflineOversamplingHarness();
+  testFourRoleEventGeneration();
   return 0;
 }

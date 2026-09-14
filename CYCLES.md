@@ -61,19 +61,28 @@ heard, approved, or preferred.
 - Non-goals: audio device/callback, file output, MIDI, model connection,
   autonomous commit, UI, and aesthetic evaluation.
 
+### Cycle 006 — role engine and realtime admission plan
+
+- Commit: recorded after this cycle is committed.
+- Scope: deterministic four-role offline trace generation and a written
+  admission gate for any future audio-callback work.
+- Evidence: repeatability, role-disable, monotonic-trace, and event-cap tests.
+- Non-goals: audio callback/device, MIDI, voice allocation, pitch rendering,
+  model connection, scene mutation, and artistic evaluation.
+
 ## Next-cycle options
 
-### Cycle 006A — realtime-kernel admission plan
+### Cycle 007A — playable keyboard and trackpad input contract
 
-Define the preallocation, lock-free queue, lifetime, and test contracts needed
-before any existing component can move toward an audio callback.
+Define normalized direct-play events and a deterministic QWERTY/trackpad
+mapping with gesture smoothing tests. No SwiftUI implementation yet.
 
-### Cycle 006B — four role-lane event generator
-
-Implement deterministic Euclidean/manual patterns for the four existing role
-lanes and emit an offline performance trace against the sample clock.
-
-### Cycle 006C — terrain-frame export contract
+### Cycle 007B — terrain-frame snapshot contract
 
 Define immutable terrain-frame snapshots for a future SwiftUI/Metal surface,
 with no UI implementation or real-time cross-thread behavior yet.
+
+### Cycle 007C — MPE state machine
+
+Implement offline lower/upper/legacy MPE decoding and per-note expression
+state, with no device I/O or callback integration.
