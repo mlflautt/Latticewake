@@ -4,6 +4,7 @@ import AVFoundation
 @_silgen_name("lw_kernel_destroy") private func lw_kernel_destroy(_ kernel: OpaquePointer)
 @_silgen_name("lw_kernel_prepare_demo") private func lw_kernel_prepare_demo(_ kernel: OpaquePointer, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_note_on") private func lw_kernel_note_on(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float) -> Int32
+@_silgen_name("lw_kernel_note_off") private func lw_kernel_note_off(_ kernel: OpaquePointer, _ note: Int32) -> Int32
 @_silgen_name("lw_kernel_render") private func lw_kernel_render(_ kernel: OpaquePointer, _ output: UnsafeMutablePointer<Float>, _ frames: UInt32) -> Int32
 
 @MainActor final class LatticewakeAudio: ObservableObject {
@@ -34,4 +35,5 @@ import AVFoundation
   }
   func stop() { engine.stop(); if let kernel { lw_kernel_destroy(kernel) }; kernel = nil; running = false }
   func play(note: Int) { if let kernel { _ = lw_kernel_note_on(kernel, Int32(note), 0.7) } }
+  func release(note: Int) { if let kernel { _ = lw_kernel_note_off(kernel, Int32(note)) } }
 }
