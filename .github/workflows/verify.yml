@@ -1,0 +1,14 @@
+name: verify
+on: [push, pull_request]
+jobs:
+  core:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: make test
+  app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+        working-directory: app
