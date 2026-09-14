@@ -12,12 +12,18 @@ import AVFoundation
   @Published private(set) var running = false
   private let engine = AVAudioEngine()
   private var kernel: OpaquePointer?
+  private var sceneJSON = DemoScene.canonicalJSON
+
+  func setScene(bytes: Data) throws {
+    guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
+    sceneJSON = text
+  }
 
   func start() throws {
     guard !running else { return }
     let format = engine.mainMixerNode.outputFormat(forBus: 0)
     guard let created = lw_kernel_create() else { throw NSError(domain: "Latticewake", code: 1) }
-    let prepared = DemoScene.canonicalJSON.withCString { lw_kernel_prepare_scene_json(created, $0, format.sampleRate) }
+    let prepared = sceneJSON.withCString { lw_kernel_prepare_scene_json(created, $0, format.sampleRate) }
     guard prepared != 0 else { lw_kernel_destroy(created); throw NSError(domain: "Latticewake", code: 2) }
     kernel = created
     let node = AVAudioSourceNode { [weak self] _, _, count, audioBufferList -> OSStatus in
