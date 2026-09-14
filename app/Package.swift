@@ -5,7 +5,7 @@ let package = Package(
   platforms: [.macOS(.v15)],
   products: [.executable(name: "LatticewakeApp", targets: ["LatticewakeApp"])],
   targets: [
-    .target(name: "LatticewakeBridge", path: "Bridge", publicHeadersPath: "include"),
+    .target(name: "LatticewakeBridge", path: "Bridge", publicHeadersPath: "include", cxxSettings: [.unsafeFlags(["-std=c++20"])]),
     .executableTarget(name: "LatticewakeApp", dependencies: ["LatticewakeBridge"], path: "Sources/LatticewakeApp"),
     .testTarget(name: "LatticewakeAppTests", dependencies: ["LatticewakeApp"], path: "Tests/LatticewakeAppTests")
   ])
