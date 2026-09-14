@@ -51,21 +51,29 @@ heard, approved, or preferred.
 - Non-goals: device audio, callback integration, render files, playback, MIDI,
   UI, oversampling, and artistic evaluation.
 
+### Cycle 005 — control and render foundation
+
+- Commit: recorded after this cycle is committed.
+- Scope: deterministic sample-clock transport, preview-only typed proposals,
+  and an in-memory 1x/2x/4x interpolation/decimation harness.
+- Evidence: transport timing, proposal-validation/preview ordering, and
+  oversampling repeatability/finite-range C++ fixtures.
+- Non-goals: audio device/callback, file output, MIDI, model connection,
+  autonomous commit, UI, and aesthetic evaluation.
+
 ## Next-cycle options
 
-### Cycle 005A — sample-clock transport
+### Cycle 006A — realtime-kernel admission plan
 
-Implement a deterministic sample-clock transport and prove tempo, phase, and
-event timing fixtures from sample counts rather than wall time.
+Define the preallocation, lock-free queue, lifetime, and test contracts needed
+before any existing component can move toward an audio callback.
 
-### Cycle 005B — typed proposal boundary
+### Cycle 006B — four role-lane event generator
 
-Define `MelodyProposal` and allowlisted `SceneProposal` types, validate them
-against Scene v0, and create preview-only traces. No model connection or
-automatic commit.
+Implement deterministic Euclidean/manual patterns for the four existing role
+lanes and emit an offline performance trace against the sample clock.
 
-### Cycle 005C — offline oversampling harness
+### Cycle 006C — terrain-frame export contract
 
-Add deterministic 1x/2x/4x offline resampling fixtures around the terrain
-voice, with finite and alias-energy technical measurements. No aesthetic
-selection or real-time performance claim.
+Define immutable terrain-frame snapshots for a future SwiftUI/Metal surface,
+with no UI implementation or real-time cross-thread behavior yet.

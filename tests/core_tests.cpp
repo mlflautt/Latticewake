@@ -1,5 +1,8 @@
 #include "event_trace.hpp"
 #include "offline_terrain_voice.hpp"
+#include "offline_oversampling.hpp"
+#include "proposals.hpp"
+#include "sample_transport.hpp"
 #include "scene.hpp"
 #include "scene_serialization.hpp"
 #include "terrain_evaluator.hpp"
@@ -225,6 +228,64 @@ void testOfflineTerrainVoice() {
   assert(error.field == "trace[10].value");
 }
 
+void testSampleClockTransport() {
+  using namespace latticewake;
+  SampleTransportError error;
+  const SampleTransportConfig config{48000.0, 120.0};
+  const auto position = advanceSampleTransport({}, 48000, config, error);
+  assert(position.has_value());
+  assert(position->sampleOffset == 48000);
+  assert(position->beatPosition == 2.0);
+  assert(position->beatPhase == 0.0);
+  const auto oneBeat = sampleOffsetForBeat(1.0, config, error);
+  assert(oneBeat.has_value() && *oneBeat == 24000);
+  assert(!sampleOffsetForBeat(-1.0, config, error).has_value());
+}
+
+void testProposalPreviewBoundary() {
+  using namespace latticewake;
+  MelodyProposal proposal{"proposal-001", "scene-001", "test", {{0.0, 1.0, 0, 0.7}, {0.5, 0.5, 2, 0.6}}};
+  assert(validateMelodyProposal(proposal).empty());
+  ProposalValidationIssue error;
+  const auto preview = previewMelodyProposal(proposal, {48000.0, 120.0}, error);
+  assert(preview.has_value());
+  assert(preview->events().size() == 4);
+  assert(preview->events()[0].sampleOffset == 0);
+  assert(preview->events()[1].sampleOffset == 12000);
+  assert(preview->events()[0].origin == EventOrigin::proposal);
+  assert(preview->validate().empty());
+
+  proposal.notes[0].velocity = 2.0;
+  assert(!validateMelodyProposal(proposal).empty());
+  assert(!previewMelodyProposal(proposal, {48000.0, 120.0}, error).has_value());
+
+  SceneProposal sceneProposal{"scene-proposal", "scene-001", "test", {{ScenePatchTarget::terrainDetail, 0.4}}};
+  assert(validateSceneProposal(sceneProposal).empty());
+  sceneProposal.patches[0].value = -0.1;
+  assert(!validateSceneProposal(sceneProposal).empty());
+}
+
+void testOfflineOversamplingHarness() {
+  using namespace latticewake;
+  const std::vector<TerrainEvaluation> trace = {{0.0}, {1.0}, {0.0}, {1.0}};
+  const OfflineTerrainVoiceConfig config{48000.0, 0.5, 20.0};
+  OfflineTerrainVoiceError error;
+  const auto direct = renderOfflineTerrainVoice(trace, config, error);
+  const auto one = renderOversampledTerrainVoice(trace, config, OversamplingFactor::x1, error);
+  assert(direct.has_value() && one.has_value());
+  assert(*direct == one->samples);
+  for (const OversamplingFactor factor : {OversamplingFactor::x2, OversamplingFactor::x4}) {
+    const auto result = renderOversampledTerrainVoice(trace, config, factor, error);
+    assert(result.has_value());
+    assert(result->samples.size() == trace.size());
+    assert(std::isfinite(result->transitionEnergy) && result->transitionEnergy >= 0.0);
+    for (const double sample : result->samples) {
+      assert(std::isfinite(sample));
+      assert(sample >= -1.0 && sample <= 1.0);
+    }
+  }
+}
+
 }  // namespace
 
 int main() {
@@ -234,5 +295,8 @@ int main() {
   testAnalyticTerrainRejectsInvalidInput();
   testSceneSerializationBoundary();
   testOfflineTerrainVoice();
+  testSampleClockTransport();
+  testProposalPreviewBoundary();
+  testOfflineOversamplingHarness();
   return 0;
 }

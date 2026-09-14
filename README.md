@@ -32,5 +32,8 @@ memory; see [the contract](contracts/SCENE_V0.md).
 An offline mono terrain-trace scaffold now provides DC blocking and bounded
 samples for technical tests only; it does not open an audio device or prove a
 listening result.
+Sample-clock transport, preview-only proposals, and an offline 1x/2x/4x
+interpolation/decimation harness are also available as deterministic core
+building blocks, not as a live audio engine.
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.

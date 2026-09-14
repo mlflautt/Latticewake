@@ -130,6 +130,10 @@ versions are recorded in receipts. Model availability, prewarming behavior,
 context limits, and any Private Cloud Compute route remain implementation-time
 probes; no network use is implied by this foundation.
 
+The current core implements typed, preview-only melody and allowlisted scene
+patch proposals. It has no Apple Intelligence connector, no other model
+provider, and no pathway that lets a proposal mutate a Scene.
+
 ## Licensing and provenance
 
 Do not copy source code, UI assets, presets, or implementation text from GPL or
