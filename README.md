@@ -1,0 +1,26 @@
+# Latticewake
+
+Latticewake is a native Apple-Silicon generative music-creation instrument.
+It combines a real-time wave-terrain voice with four harmony-aware generative
+roles, direct keyboard/trackpad/MPE performance, and an optional on-device
+creative-proposal layer.
+
+This directory is deliberately separate from `hermes-music/`: Latticewake is a
+new product foundation, not a modification to the existing SuperDirt palette or
+composition lineage.
+
+Start with [the foundation](docs/FOUNDATION.md). The first shared semantic
+contract is [Scene v0](contracts/SCENE_V0.md).
+
+Run the current contract-only verification with:
+
+```bash
+make test
+```
+
+## Status
+
+Planning and contracts only. No DSP, UI, MIDI, model integration, audio render,
+or creative-performance claim has been implemented or auditioned yet.
+Development advances in committed, reviewable increments; see
+[`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.
