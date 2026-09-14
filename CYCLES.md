@@ -70,19 +70,22 @@ heard, approved, or preferred.
 - Non-goals: audio callback/device, MIDI, voice allocation, pitch rendering,
   model connection, scene mutation, and artistic evaluation.
 
+### Cycle 007 — direct play and terrain snapshots
+
+- Scope: QWERTY note mapping, smoothed trackpad semantics, and immutable terrain frames.
+- Evidence: mapping, smoothing, snapshot repeatability, and invalid-range tests.
+- Non-goals: native UI, MIDI device I/O, Metal rendering, callback integration, and artistic evaluation.
+
 ## Next-cycle options
 
-### Cycle 007A — playable keyboard and trackpad input contract
+### Cycle 008A — offline MPE state machine
 
-Define normalized direct-play events and a deterministic QWERTY/trackpad
-mapping with gesture smoothing tests. No SwiftUI implementation yet.
+Implement lower/upper/legacy MPE decoding and per-note expression state, with no device I/O.
 
-### Cycle 007B — terrain-frame snapshot contract
+### Cycle 008B — native SwiftUI/Metal shell plan
 
-Define immutable terrain-frame snapshots for a future SwiftUI/Metal surface,
-with no UI implementation or real-time cross-thread behavior yet.
+Create the native-app module boundary and build plan, without joining it to audio yet.
 
-### Cycle 007C — MPE state machine
+### Cycle 008C — scene persistence file boundary
 
-Implement offline lower/upper/legacy MPE decoding and per-note expression
-state, with no device I/O or callback integration.
+Add explicit atomic file import/export around the tested Scene bytes.

@@ -1,4 +1,5 @@
 #include "event_trace.hpp"
+#include "direct_play.hpp"
 #include "offline_terrain_voice.hpp"
 #include "offline_oversampling.hpp"
 #include "proposals.hpp"
@@ -7,6 +8,7 @@
 #include "scene.hpp"
 #include "scene_serialization.hpp"
 #include "terrain_evaluator.hpp"
+#include "terrain_frame.hpp"
 
 #include <cassert>
 #include <cmath>
@@ -317,6 +319,31 @@ void testFourRoleEventGeneration() {
   assert(error.field == "events");
 }
 
+void testDirectPlayAndTerrainFrames() {
+  using namespace latticewake;
+  const auto key = qwertyEvent("a", true, 42);
+  const auto release = qwertyEvent("a", false, 42);
+  assert(key.has_value() && release.has_value());
+  assert(key->note == 60 && key->type == DirectPlayType::noteOn);
+  assert(release->type == DirectPlayType::noteOff);
+  assert(!qwertyEvent("z", true, 0).has_value());
+  const auto trackpad = smoothTrackpad({}, 1.0, 0.25, 0.5, 0.5);
+  assert(trackpad.has_value());
+  assert(trackpad->glide == 0.5 && trackpad->slide == 0.125 && trackpad->press == 0.25);
+  assert(!smoothTrackpad({}, 2.0, 0.0, 0.0, 0.0).has_value());
+
+  Scene scene = validScene();
+  scene.terrain.kind = "mandelbrot";
+  TerrainFrameError error;
+  const TerrainFrameRequest request{128, 0.0, 0.1, 5};
+  const auto frame = buildTerrainFrame(scene, request, error);
+  const auto repeated = buildTerrainFrame(scene, request, error);
+  assert(frame.has_value() && repeated.has_value());
+  assert(frame->sceneId == "scene-001" && frame->sampleOffset == 128);
+  assert(frame->points.size() == 5 && frame->points[2].value == repeated->points[2].value);
+  assert(!buildTerrainFrame(scene, {0, 0.9, 0.1, 3}, error).has_value());
+}
+
 }  // namespace
 
 int main() {
@@ -330,5 +357,6 @@ int main() {
   testProposalPreviewBoundary();
   testOfflineOversamplingHarness();
   testFourRoleEventGeneration();
+  testDirectPlayAndTerrainFrames();
   return 0;
 }
