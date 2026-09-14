@@ -11,6 +11,9 @@ composition lineage.
 
 Start with [the foundation](docs/FOUNDATION.md). The first shared semantic
 contract is [Scene v0](contracts/SCENE_V0.md).
+The supplied research evidence is preserved intact in
+[`research/source-reports/`](research/source-reports/), with hashes recorded in
+the foundation document.
 
 Run the current contract-only verification with:
 

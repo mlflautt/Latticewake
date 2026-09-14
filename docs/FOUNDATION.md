@@ -21,9 +21,9 @@ These user-supplied reports were read as design evidence:
 
 | Report | SHA-256 | Decisions it supports |
 | --- | --- | --- |
-| `../../Wave-Terrain Synthesis DSP Research.md` | `f5a263c7fed4b546b839ea01cc3e5abcb635d05443deb489f293b101306f1d84` | Analytic terrain-first kernel, smooth escape values, bounded iteration, oversampling, spatial feedback bounds, DC removal, and separate buffered-terrain support. |
-| `../../Latticewake Generative Music Research.md` | `e4e695c504cc0225d493b4957305e668ff7cd75698dd34a591eab8c85161569e` | Generator placement, deterministic seeds, bounded chaos, asynchronous grammar expansion, and Metal-only dynamic-field simulation. |
-| `../../Latticewake Audio Architecture Research.md` | `baaf34a326402ea7f3e7ea609a2017f478e9239b1fd8c6202259c6c7f7db7e68` | C++/Swift isolation, MPE expression semantics, sample-clocked transport, triple-buffered visual state, and proposal-preview-commit. |
+| [`Wave-Terrain Synthesis DSP Research.md`](../research/source-reports/Wave-Terrain%20Synthesis%20DSP%20Research.md) | `f5a263c7fed4b546b839ea01cc3e5abcb635d05443deb489f293b101306f1d84` | Analytic terrain-first kernel, smooth escape values, bounded iteration, oversampling, spatial feedback bounds, DC removal, and separate buffered-terrain support. |
+| [`Latticewake Generative Music Research.md`](../research/source-reports/Latticewake%20Generative%20Music%20Research.md) | `e4e695c504cc0225d493b4957305e668ff7cd75698dd34a591eab8c85161569e` | Generator placement, deterministic seeds, bounded chaos, asynchronous grammar expansion, and Metal-only dynamic-field simulation. |
+| [`Latticewake Audio Architecture Research.md`](../research/source-reports/Latticewake%20Audio%20Architecture%20Research.md) | `baaf34a326402ea7f3e7ea609a2017f478e9239b1fd8c6202259c6c7f7db7e68` | C++/Swift isolation, MPE expression semantics, sample-clocked transport, triple-buffered visual state, and proposal-preview-commit. |
 
 The reports' mathematical and technical recommendations are useful hypotheses
 and implementation inputs, not runtime proof, legal advice, or evidence that a

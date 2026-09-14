@@ -6,8 +6,9 @@ Base repository commit: `44f58f475b549587492b9fc29309cf6e3b65ca34`.
 
 This handoff owns only `Latticewake/`. It added a dependency-free C++20 typed
 Scene v0 validator, canonical event trace, Make test target, MPE semantic
-contract, and report-informed foundation documents. The three root research
-reports remain user-owned and unmodified.
+contract, and report-informed foundation documents. The three user-supplied
+research reports were unmodified; they were later relocated intact to
+`research/source-reports/` and committed with their original hashes.
 
 ## Evidence
 
