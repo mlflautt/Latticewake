@@ -1,7 +1,9 @@
 #include "event_trace.hpp"
 #include "scene.hpp"
+#include "terrain_evaluator.hpp"
 
 #include <cassert>
+#include <cmath>
 #include <limits>
 
 namespace {
@@ -68,10 +70,88 @@ void testTraceDeterminismAndOrdering() {
   assert(!traceA.append({31, EventOrigin::proposal, EventType::scene, {}}));
 }
 
+void testAnalyticTerrainFixtures() {
+  using namespace latticewake;
+  Scene scene = validScene();
+  scene.terrain.kind = "mandelbrot";
+  scene.terrain.normalization = 1.0;
+  scene.terrain.detail = 0.5;
+  scene.terrain.zoom = 0.0;
+  scene.terrain.offsetX = 0.5;
+  scene.terrain.offsetY = 0.5;
+  scene.terrain.rotation = 0.0;
+  scene.terrain.maxIterations = 64;
+  scene.path = {"ellipse", 0.0, 0.0, 0.0, 0.0, 0.5, 0.5, 0.0, 0.0, 1.0};
+
+  const TerrainEvaluation interior = evaluateAnalyticTerrain(scene, {0.0, 0.0, 0.0});
+  assert(!interior.escaped);
+  assert(interior.value == 0.0);
+  assert(interior.iterations == 64);
+
+  scene.path.translationX = 0.6875;
+  const TerrainEvaluation escaped = evaluateAnalyticTerrain(scene, {0.0, 0.0, 0.0});
+  const TerrainEvaluation repeated = evaluateAnalyticTerrain(scene, {0.0, 0.0, 0.0});
+  assert(escaped.escaped);
+  assert(escaped.iterations == 3);
+  assert(escaped.value > 0.9 && escaped.value <= 1.0);
+  assert(escaped.value == repeated.value);
+  assert(escaped.pathX == repeated.pathX);
+  assert(escaped.pathY == repeated.pathY);
+
+  scene.terrain.kind = "julia";
+  const TerrainEvaluation julia = evaluateAnalyticTerrain(scene, {0.25, 0.0, 0.0});
+  const TerrainEvaluation repeatedJulia = evaluateAnalyticTerrain(scene, {0.25, 0.0, 0.0});
+  assert(std::isfinite(julia.value));
+  assert(julia.value >= 0.0 && julia.value <= 1.0);
+  assert(julia.value == repeatedJulia.value);
+  assert(julia.iterations == repeatedJulia.iterations);
+
+  constexpr const char* kPathKinds[] = {"ellipse", "lissajous", "spiral", "meander"};
+  for (const char* pathKind : kPathKinds) {
+    scene.path.kind = pathKind;
+    scene.path.radiusX = 1.0;
+    scene.path.radiusY = 1.0;
+    scene.path.translationX = 1.0;
+    scene.path.translationY = 1.0;
+    scene.path.feedback = 1.0;
+    scene.path.spatialLimit = 0.25;
+    const TerrainEvaluation bounded = evaluateAnalyticTerrain(scene, {0.75, 100.0, -100.0});
+    assert(std::isfinite(bounded.pathX));
+    assert(std::isfinite(bounded.pathY));
+    assert(std::abs(bounded.pathX) <= 0.5);
+    assert(std::abs(bounded.pathY) <= 0.5);
+  }
+}
+
+void testAnalyticTerrainRejectsInvalidInput() {
+  using namespace latticewake;
+  Scene scene = validScene();
+  scene.terrain.kind = "mandelbrot";
+  scene.path.kind = "ellipse";
+  const TerrainEvaluation invalidPhase = evaluateAnalyticTerrain(scene, {-0.1, 0.0, 0.0});
+  assert(!invalidPhase.escaped && invalidPhase.value == 0.0);
+
+  scene.terrain.kind = "unimplemented";
+  const TerrainEvaluation unsupported = evaluateAnalyticTerrain(scene, {0.0, 0.0, 0.0});
+  assert(!unsupported.escaped && unsupported.value == 0.0);
+
+  scene.terrain.kind = "mandelbrot";
+  scene.path.kind = "unimplemented";
+  const TerrainEvaluation unsupportedPath = evaluateAnalyticTerrain(scene, {0.0, 0.0, 0.0});
+  assert(!unsupportedPath.escaped && unsupportedPath.value == 0.0);
+
+  scene.path.kind = "ellipse";
+  const TerrainEvaluation nonFinite =
+      evaluateAnalyticTerrain(scene, {0.0, std::numeric_limits<double>::infinity(), 0.0});
+  assert(!nonFinite.escaped && nonFinite.value == 0.0);
+}
+
 }  // namespace
 
 int main() {
   testSceneValidation();
   testTraceDeterminismAndOrdering();
+  testAnalyticTerrainFixtures();
+  testAnalyticTerrainRejectsInvalidInput();
   return 0;
 }

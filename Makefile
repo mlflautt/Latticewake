@@ -3,7 +3,7 @@ CXXFLAGS ?= -std=c++20 -Wall -Wextra -Werror -pedantic -O2
 INCLUDES = -Isrc
 BUILD_DIR = build
 TEST_BIN = $(BUILD_DIR)/latticewake_core_tests
-CORE_SOURCES = src/scene.cpp src/event_trace.cpp
+CORE_SOURCES = src/scene.cpp src/event_trace.cpp src/terrain_evaluator.cpp
 TEST_SOURCES = tests/core_tests.cpp
 
 .PHONY: test clean

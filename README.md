@@ -23,7 +23,9 @@ make test
 
 ## Status
 
-Planning and contracts only. No DSP, UI, MIDI, model integration, audio render,
-or creative-performance claim has been implemented or auditioned yet.
+The offline analytic terrain evaluator now has deterministic fixtures for the
+initial Mandelbrot and Julia field families. No audio rendering, UI, MIDI,
+model integration, or creative-performance claim has been implemented or
+auditioned yet.
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.

@@ -22,16 +22,31 @@ heard, approved, or preferred.
 - Evidence: warnings-as-errors test build plus AddressSanitizer and UndefinedBehaviorSanitizer runs; see `handoffs/foundation-001.md`.
 - Non-goals: audio rendering, DSP, UI, MIDI I/O, model execution, and artistic evaluation.
 
-## Next-cycle options
-
 ### Cycle 002A — analytic terrain evaluator
 
-Implement a pure, bounded smooth-potential terrain evaluator with fixed fixtures. It accepts validated scene terrain/path inputs and emits normalized field values. No audio callback, image import, or UI.
+- Commit: recorded after this cycle is committed.
+- Scope: deterministic, bounded scalar sampling for `mandelbrot` and `julia`,
+  plus `ellipse`, `lissajous`, `spiral`, and `meander` paths.
+- Evidence: fixed C++ fixtures cover supported families, path bounds, invalid
+  inputs, and repeated evaluation.
+- Non-goals: audio rendering/callback, image input, UI, MIDI, serialization,
+  third-party dependencies, and artistic evaluation.
 
-### Cycle 002B — scene serialization boundary
+## Next-cycle options
 
-Specify a versioned serialized Scene v0 representation, parse it into the existing typed model, and prove rejection of unknown or malformed values. No runtime audio behavior.
+### Cycle 003A — scene serialization boundary
 
-### Cycle 002C — offline voice scaffold
+Specify a versioned serialized Scene v0 representation, parse it into the
+existing typed model, and prove rejection of unknown or malformed values. No
+runtime audio behavior.
 
-Add an offline-only mono terrain-voice prototype consuming a deterministic control trace, with DC and finite-output checks. This is technical output only; listening remains a human review gate.
+### Cycle 003B — offline terrain-voice scaffold
+
+Add an offline-only mono terrain-voice prototype consuming deterministic terrain
+samples, with DC and finite-output checks. This is technical output only;
+listening remains a human review gate.
+
+### Cycle 003C — sample-clock transport
+
+Implement a deterministic sample-clock transport that emits no sound, and prove
+tempo/phase/event timing fixtures from sample counts rather than wall time.
