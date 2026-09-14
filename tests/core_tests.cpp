@@ -1,4 +1,5 @@
 #include "event_trace.hpp"
+#include "offline_terrain_voice.hpp"
 #include "scene.hpp"
 #include "scene_serialization.hpp"
 #include "terrain_evaluator.hpp"
@@ -189,6 +190,41 @@ void testSceneSerializationBoundary() {
   assert(!parseSceneV0(outOfRange, error).has_value());
 }
 
+void testOfflineTerrainVoice() {
+  using namespace latticewake;
+  std::vector<TerrainEvaluation> trace;
+  trace.reserve(4800);
+  for (int index = 0; index < 4800; ++index) {
+    trace.push_back({1.0, 0.0, 0.0, 1, true});
+  }
+  OfflineTerrainVoiceError error;
+  const OfflineTerrainVoiceConfig config{48000.0, 1.0, 20.0};
+  const auto rendered = renderOfflineTerrainVoice(trace, config, error);
+  const auto repeated = renderOfflineTerrainVoice(trace, config, error);
+  assert(rendered.has_value());
+  assert(repeated.has_value());
+  assert(*rendered == *repeated);
+  assert(rendered->size() == trace.size());
+  double tailSum = 0.0;
+  for (std::size_t index = 0; index < rendered->size(); ++index) {
+    assert(std::isfinite((*rendered)[index]));
+    assert((*rendered)[index] >= -1.0 && (*rendered)[index] <= 1.0);
+    if (index >= rendered->size() - 480U) {
+      tailSum += std::abs((*rendered)[index]);
+    }
+  }
+  assert(tailSum / 480.0 < 0.001);
+
+  OfflineTerrainVoiceConfig invalidConfig = config;
+  invalidConfig.sampleRate = 0.0;
+  assert(!renderOfflineTerrainVoice(trace, invalidConfig, error).has_value());
+  assert(error.field == "sampleRate");
+
+  trace[10].value = std::numeric_limits<double>::quiet_NaN();
+  assert(!renderOfflineTerrainVoice(trace, config, error).has_value());
+  assert(error.field == "trace[10].value");
+}
+
 }  // namespace
 
 int main() {
@@ -197,5 +233,6 @@ int main() {
   testAnalyticTerrainFixtures();
   testAnalyticTerrainRejectsInvalidInput();
   testSceneSerializationBoundary();
+  testOfflineTerrainVoice();
   return 0;
 }

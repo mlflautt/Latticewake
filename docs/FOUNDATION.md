@@ -159,3 +159,7 @@ or clipping output; it must not select an aesthetically preferred result.
 The next implementation task is intentionally limited to steps 1 and 2. It is
 not authorized to package a plugin, add a third-party dependency, install
 software, connect a cloud model, or make a creative selection.
+
+The current offline terrain-voice scaffold completes only the trace-to-mono
+DC-blocking and finite-output portion of step 2. It has no audio device,
+oversampling, render-file, or listening evidence.

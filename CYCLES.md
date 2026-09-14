@@ -41,22 +41,31 @@ heard, approved, or preferred.
   unknown-field, unsafe-seed, unknown-role, and out-of-range rejection tests.
 - Non-goals: files, audio, MIDI, UI, network behavior, and a general JSON API.
 
-## Next-cycle options
-
 ### Cycle 004A — offline terrain-voice scaffold
 
-Add an offline-only mono terrain-voice prototype consuming deterministic terrain
-samples, with DC and finite-output checks. This is technical output only;
-listening remains a human review gate.
+- Commit: recorded after this cycle is committed.
+- Scope: deterministic trace-to-mono samples, one-pole DC blocking, and a
+  conservative in-memory soft limiter.
+- Evidence: deterministic-output, finite/range, DC-tail, and invalid-input
+  C++ fixtures.
+- Non-goals: device audio, callback integration, render files, playback, MIDI,
+  UI, oversampling, and artistic evaluation.
 
-### Cycle 004B — sample-clock transport
+## Next-cycle options
 
-Implement a deterministic sample-clock transport that emits no sound, and prove
-tempo, phase, and event timing fixtures from sample counts rather than wall
-time.
+### Cycle 005A — sample-clock transport
 
-### Cycle 004C — typed proposal boundary
+Implement a deterministic sample-clock transport and prove tempo, phase, and
+event timing fixtures from sample counts rather than wall time.
+
+### Cycle 005B — typed proposal boundary
 
 Define `MelodyProposal` and allowlisted `SceneProposal` types, validate them
 against Scene v0, and create preview-only traces. No model connection or
 automatic commit.
+
+### Cycle 005C — offline oversampling harness
+
+Add deterministic 1x/2x/4x offline resampling fixtures around the terrain
+voice, with finite and alias-energy technical measurements. No aesthetic
+selection or real-time performance claim.
