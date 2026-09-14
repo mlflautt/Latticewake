@@ -1,9 +1,23 @@
 # Latticewake Scene v0 contract
 
-This is the semantic contract for the first typed validator and test fixtures.
-It is not yet a serialized JSON schema; implementation must preserve these
-names and meanings before adding wire-format conveniences. A future parser must
-construct this typed model and then call the same validator.
+This is the semantic contract and wire format for Scene v0. It is serialized as
+strict UTF-8 JSON and parsed into the typed model before the same Scene
+validator runs. The parser is intentionally schema-specific, not a general
+JSON configuration surface.
+
+## Wire-format rules
+
+- Objects reject duplicate and unknown fields. Every required field must be
+  present; `createdFrom` and `tuningID` are optional and may be `null`.
+- JSON numbers must be finite. `seed` and each role `seedOffset` are decimal
+  strings so all unsigned 64-bit values survive JavaScript-number boundaries.
+- `maxIterations`, scale degrees, chord fields, and pattern values are JSON
+  integer numbers within their target C++ integer range.
+- The canonical serializer emits compact JSON with a fixed field order and
+  direct UTF-8 strings. Equal valid typed scenes produce equal serialized bytes.
+- The current parser accepts simple JSON string escapes and direct UTF-8, but
+  rejects `\\u` escapes. A future revision may broaden input support only
+  without changing canonical output or semantics.
 
 ## Required scene identity
 

@@ -27,5 +27,7 @@ The offline analytic terrain evaluator now has deterministic fixtures for the
 initial Mandelbrot and Julia field families. No audio rendering, UI, MIDI,
 model integration, or creative-performance claim has been implemented or
 auditioned yet.
+Scene v0 now also has strict, deterministic JSON import/export entirely in
+memory; see [the contract](contracts/SCENE_V0.md).
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.

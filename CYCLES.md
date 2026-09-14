@@ -32,21 +32,31 @@ heard, approved, or preferred.
 - Non-goals: audio rendering/callback, image input, UI, MIDI, serialization,
   third-party dependencies, and artistic evaluation.
 
-## Next-cycle options
-
 ### Cycle 003A — scene serialization boundary
 
-Specify a versioned serialized Scene v0 representation, parse it into the
-existing typed model, and prove rejection of unknown or malformed values. No
-runtime audio behavior.
+- Commit: recorded after this cycle is committed.
+- Scope: strict, dependency-free JSON parsing and canonical JSON serialization
+  for the typed Scene v0 model.
+- Evidence: round-trip canonical-byte fixtures plus malformed, duplicate,
+  unknown-field, unsafe-seed, unknown-role, and out-of-range rejection tests.
+- Non-goals: files, audio, MIDI, UI, network behavior, and a general JSON API.
 
-### Cycle 003B — offline terrain-voice scaffold
+## Next-cycle options
+
+### Cycle 004A — offline terrain-voice scaffold
 
 Add an offline-only mono terrain-voice prototype consuming deterministic terrain
 samples, with DC and finite-output checks. This is technical output only;
 listening remains a human review gate.
 
-### Cycle 003C — sample-clock transport
+### Cycle 004B — sample-clock transport
 
 Implement a deterministic sample-clock transport that emits no sound, and prove
-tempo/phase/event timing fixtures from sample counts rather than wall time.
+tempo, phase, and event timing fixtures from sample counts rather than wall
+time.
+
+### Cycle 004C — typed proposal boundary
+
+Define `MelodyProposal` and allowlisted `SceneProposal` types, validate them
+against Scene v0, and create preview-only traces. No model connection or
+automatic commit.

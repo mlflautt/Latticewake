@@ -1,5 +1,6 @@
 #include "event_trace.hpp"
 #include "scene.hpp"
+#include "scene_serialization.hpp"
 #include "terrain_evaluator.hpp"
 
 #include <cassert>
@@ -146,6 +147,48 @@ void testAnalyticTerrainRejectsInvalidInput() {
   assert(!nonFinite.escaped && nonFinite.value == 0.0);
 }
 
+void testSceneSerializationBoundary() {
+  using namespace latticewake;
+  Scene scene = validScene();
+  SceneSerializationError error;
+  const auto serialized = serializeSceneV0(scene, error);
+  assert(serialized.has_value());
+  const auto parsed = parseSceneV0(*serialized, error);
+  assert(parsed.has_value());
+  const auto reserialized = serializeSceneV0(*parsed, error);
+  assert(reserialized.has_value());
+  assert(*serialized == *reserialized);
+
+  assert(!parseSceneV0("{", error).has_value());
+
+  std::string duplicate = *serialized;
+  duplicate.insert(duplicate.size() - 1, ",\"title\":\"duplicate\"");
+  assert(!parseSceneV0(duplicate, error).has_value());
+
+  std::string unknown = *serialized;
+  unknown.insert(unknown.size() - 1, ",\"unknownField\":true");
+  assert(!parseSceneV0(unknown, error).has_value());
+
+  std::string unsafeSeed = *serialized;
+  const std::size_t seedPosition = unsafeSeed.find("\"seed\":\"42\"");
+  assert(seedPosition != std::string::npos);
+  unsafeSeed.replace(seedPosition, std::string("\"seed\":\"42\"").size(),
+                     "\"seed\":\"18446744073709551616\"");
+  assert(!parseSceneV0(unsafeSeed, error).has_value());
+
+  std::string unknownRole = *serialized;
+  const std::size_t rolePosition = unknownRole.find("\"motifA\"");
+  assert(rolePosition != std::string::npos);
+  unknownRole.replace(rolePosition, std::string("\"motifA\"").size(), "\"other\"");
+  assert(!parseSceneV0(unknownRole, error).has_value());
+
+  std::string outOfRange = *serialized;
+  const std::size_t detailPosition = outOfRange.find("\"detail\":0.5");
+  assert(detailPosition != std::string::npos);
+  outOfRange.replace(detailPosition, std::string("\"detail\":0.5").size(), "\"detail\":2");
+  assert(!parseSceneV0(outOfRange, error).has_value());
+}
+
 }  // namespace
 
 int main() {
@@ -153,5 +196,6 @@ int main() {
   testTraceDeterminismAndOrdering();
   testAnalyticTerrainFixtures();
   testAnalyticTerrainRejectsInvalidInput();
+  testSceneSerializationBoundary();
   return 0;
 }
