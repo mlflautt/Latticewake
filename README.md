@@ -58,6 +58,10 @@ blocks above 4,096 frames as silence. Its bridge stress evidence is documented
 in the real-time admission gate; it is not target-device callback admission or
 a listening result.
 
+For a real standalone audition, follow the
+[target-Mac protocol](docs/TARGET_MAC_AUDITION.md). Its technical receipt and
+listener observation are intentionally separate evidence.
+
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see

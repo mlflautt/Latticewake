@@ -54,3 +54,16 @@ This is a source-level and bridge-level preflight, not admission. It does not
 instrument Core Audio's internals, prove the Swift runtime performs no hidden
 work, measure actual device deadlines, or replace the required target-device
 performance and human listening session.
+
+## Cycle 025 target-audition kit
+
+The app now presents a stop-time audition receipt containing callback blocks,
+rendered frames, maximum bridge-render duration, bridge-budget misses, and
+rejected blocks. Duration is measured around the app-owned C++ renderer and
+compared to the block's sample-time budget; it does not measure the entire
+Core Audio scheduling path. The reproducible target-Mac procedure and a
+listener-owned record template are in [TARGET_MAC_AUDITION.md](TARGET_MAC_AUDITION.md).
+
+No completed target-Mac session or listening observation is recorded in this
+repository. Therefore Cycle 025 provides instrumentation and protocol only;
+it does not change the admission status above.

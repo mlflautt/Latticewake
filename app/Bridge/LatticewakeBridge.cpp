@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <chrono>
 #include <new>
 #include <span>
 #include <string_view>
@@ -29,6 +30,10 @@ std::uint64_t fnv1a64(const std::string_view bytes) {
   }
   return value;
 }
+void updateMaximum(std::atomic<std::uint64_t>& target, const std::uint64_t candidate) {
+  std::uint64_t observed=target.load(std::memory_order_relaxed);
+  while(observed<candidate&&!target.compare_exchange_weak(observed,candidate,std::memory_order_relaxed)) {}
+}
 struct RenderPlanSlot {
   latticewake::RealtimeKernel kernel;
   std::atomic<std::uint64_t> generation{0};
@@ -45,6 +50,9 @@ struct LWKernelRef {
   alignas(64) std::atomic<std::uint64_t> callbackCount{0};
   std::atomic<std::uint64_t> renderedFrames{0};
   std::atomic<std::uint64_t> renderFailures{0};
+  std::atomic<std::uint64_t> maximumRenderNanoseconds{0};
+  std::atomic<std::uint64_t> deadlineMisses{0};
+  double callbackSampleRate{0.0};
 };
 
 struct LWMpeStateRef {
@@ -69,6 +77,7 @@ static int prepareInitial(LWKernelRef* kernel,const latticewake::Scene& scene,co
   kernel->plans[0].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->activePlan.store(0,std::memory_order_release);
   kernel->pendingPlan.store(kNoPlan,std::memory_order_release);
+  kernel->callbackSampleRate=rate;
   return 1;
 }
 static int publishPlan(LWKernelRef* kernel,const latticewake::Scene& scene,const double rate) {
@@ -122,6 +131,7 @@ int lw_kernel_note_expression(LWKernelRef* k,int note,float glide,float press,fl
 int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   if(!k||!out)return 0;
   if(frames==0||frames>kMaximumCallbackFrames) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
+  const auto started=std::chrono::steady_clock::now();
   k->renderBegun.store(true,std::memory_order_release);
   const std::uint32_t pending=k->pendingPlan.load(std::memory_order_acquire);
   if(pending!=kNoPlan) {
@@ -134,6 +144,10 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   while(count<events.size()&&k->events.tryPop(event)) events[count++]=event;
   const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);
   const bool rendered=k->plans[active].kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count));
+  const auto elapsed=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count());
+  updateMaximum(k->maximumRenderNanoseconds,elapsed);
+  const auto deadline=static_cast<std::uint64_t>(static_cast<double>(frames)*1000000000.0/k->callbackSampleRate);
+  if(elapsed>deadline)k->deadlineMisses.fetch_add(1,std::memory_order_relaxed);
   if(!rendered) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
   k->callbackCount.fetch_add(1,std::memory_order_relaxed);
   k->renderedFrames.fetch_add(frames,std::memory_order_relaxed);
@@ -151,7 +165,7 @@ int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
 }
 int lw_kernel_callback_status(const LWKernelRef* k,LWCallbackStatus* status) {
   if(!k||!status)return 0;
-  *status={k->callbackCount.load(std::memory_order_relaxed),k->renderedFrames.load(std::memory_order_relaxed),k->renderFailures.load(std::memory_order_relaxed),kMaximumCallbackFrames};
+  *status={k->callbackCount.load(std::memory_order_relaxed),k->renderedFrames.load(std::memory_order_relaxed),k->renderFailures.load(std::memory_order_relaxed),k->maximumRenderNanoseconds.load(std::memory_order_relaxed),k->deadlineMisses.load(std::memory_order_relaxed),kMaximumCallbackFrames};
   return 1;
 }
 unsigned int lw_kernel_maximum_callback_frames(void) { return kMaximumCallbackFrames; }

@@ -15,6 +15,8 @@ typedef struct LWCallbackStatus {
   unsigned long long callback_count;
   unsigned long long rendered_frames;
   unsigned long long render_failures;
+  unsigned long long maximum_render_nanoseconds;
+  unsigned long long deadline_misses;
   unsigned int maximum_callback_frames;
 } LWCallbackStatus;
 typedef struct LWTerrainFramePoint {

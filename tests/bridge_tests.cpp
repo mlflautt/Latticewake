@@ -167,6 +167,7 @@ void testCallbackRouteStressAndBounds() {
     assert(status.callback_count == 400U);
     assert(status.rendered_frames == expectedFrames);
     assert(status.render_failures == 0U);
+    assert(status.maximum_render_nanoseconds > 0U);
     assert(status.maximum_callback_frames == output.size());
     assert(lw_kernel_render(kernel, output.data(), status.maximum_callback_frames + 1U) == 0);
     assert(lw_kernel_callback_status(kernel, &status) == 1);

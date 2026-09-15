@@ -16,6 +16,8 @@ private struct BridgeCallbackStatus {
   var callbackCount: UInt64 = 0
   var renderedFrames: UInt64 = 0
   var renderFailures: UInt64 = 0
+  var maximumRenderNanoseconds: UInt64 = 0
+  var deadlineMisses: UInt64 = 0
   var maximumCallbackFrames: UInt32 = 0
 }
 
@@ -105,7 +107,7 @@ private enum CallbackRenderRoute {
     if let kernel {
       var status = BridgeCallbackStatus()
       if lw_kernel_callback_status(kernel, &status) != 0 {
-        callbackStatus = "Callback preflight: \(status.callbackCount) blocks, \(status.renderedFrames) frames, \(status.renderFailures) rejected."
+        callbackStatus = "Audition receipt: \(status.callbackCount) blocks, \(status.renderedFrames) frames, max \(status.maximumRenderNanoseconds / 1_000) µs, \(status.deadlineMisses) bridge budget misses, \(status.renderFailures) rejected."
       }
       lw_kernel_destroy(kernel)
     }

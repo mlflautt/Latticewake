@@ -179,9 +179,20 @@ heard, approved, or preferred.
 - Non-goals: Core Audio internal lock/allocation proof, device deadline data,
   target-Mac performance, hardware MIDI, human listening, or callback admission.
 
+### Cycle 025 — target-audition instrumentation kit
+
+- Scope: app-owned bridge render-duration/budget telemetry, stop-time audition
+  receipt, and a target-Mac protocol that preserves listener observations as
+  human-provided evidence.
+- Evidence: normal/sanitizer bridge tests check nonzero render-duration
+  telemetry; the Swift package compiles the receipt path. See
+  `handoffs/cycle-025.md`.
+- Non-goals: a completed target-device run, Core Audio internal tracing,
+  listener verdict, callback admission, or any automatic quality decision.
+
 ## Next-cycle options
 
-### Cycle 025 — target-device callback evidence
+### Cycle 026 — recorded target-device audition
 
-Run a deliberately recorded target-Mac buffer/deadline and listening session;
-admit the exact route only if its documented technical and human gates pass.
+Run the protocol on the target Mac, preserve the returned technical receipt and
+human observation separately, then make an explicit admission decision.
