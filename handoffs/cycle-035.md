@@ -34,6 +34,9 @@ Base: `417987b` (`v0.34.0-alpha.3`).
   ad-hoc signed.
 - Native UI lifecycle smoke: pass; the rebuilt app launched, entered Audition
   on Start, and returned to Ready on Stop without a crash.
+- Hosted verification: both `verify` runs passed for exact implementation SHA
+  `42c3d29e96fe5f310ad14edf7d750648c7b37c3e` (GitHub Actions runs
+  `35018267671` and `35018267348`).
 
 ## Runtime evidence and limitations
 
