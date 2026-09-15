@@ -1,16 +1,17 @@
 #include "LatticewakeBridge.h"
 #include <array>
+#include <cstdint>
 #include <new>
 #include <span>
 #include "../../../src/scene.cpp"
 #include "../../../src/terrain_evaluator.cpp"
 #include "../../../src/scene_serialization.cpp"
 #include "../../../src/realtime_kernel.cpp"
+#include "../../../src/realtime_event_queue.hpp"
 
 struct LWKernelRef {
   latticewake::RealtimeKernel kernel;
-  std::array<latticewake::KernelEvent, latticewake::RealtimeKernel::kMaxEvents> events{};
-  std::size_t count{};
+  latticewake::RealtimeEventQueue events;
 };
 
 static latticewake::Scene demoScene() {
@@ -27,8 +28,22 @@ LWKernelRef* lw_kernel_create(void) { return new (std::nothrow) LWKernelRef; }
 void lw_kernel_destroy(LWKernelRef* kernel) { delete kernel; }
 int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return kernel&&kernel->kernel.prepare(demoScene(),rate); }
 int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);return scene&&kernel->kernel.prepare(*scene,rate); }
-int lw_kernel_note_on(LWKernelRef* k,int n,float v) { if(!k||k->count==k->events.size())return 0;k->events[k->count++]={0,true,n,v};return 1; }
-int lw_kernel_note_off(LWKernelRef* k,int n) { if(!k||k->count==k->events.size())return 0;k->events[k->count++]={0,false,n,0};return 1; }
-int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { if(!k||k->count==k->events.size())return 0;k->events[k->count++]={0,false,0,0,glide,press,slide,true};return 1; }
-int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) { if(!k||!out)return 0;const auto ok=k->kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(k->events.data(),k->count));k->count=0;return ok; }
-void lw_kernel_reset(LWKernelRef* k) { if(k){k->kernel.reset();k->count=0;} }
+int lw_kernel_note_on(LWKernelRef* k,int n,float v) { return k&&k->events.tryPush({0,true,n,v}) ? 1 : 0; }
+int lw_kernel_note_off(LWKernelRef* k,int n) { return k&&k->events.tryPush({0,false,n,0}) ? 1 : 0; }
+int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { return k&&k->events.tryPush({0,false,0,0,glide,press,slide,true}) ? 1 : 0; }
+int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
+  if(!k||!out)return 0;
+  std::array<latticewake::KernelEvent,latticewake::RealtimeKernel::kMaxEvents> events{};
+  std::size_t count=0;
+  latticewake::KernelEvent event;
+  while(count<events.size()&&k->events.tryPop(event)) events[count++]=event;
+  return k->kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count)) ? 1 : 0;
+}
+int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
+  if(!k||!status)return 0;
+  status->pending_events=k->events.pending();
+  status->dropped_events=k->events.dropped();
+  return 1;
+}
+unsigned int lw_kernel_event_queue_capacity(void) { return latticewake::RealtimeEventQueue::kUsableCapacity; }
+void lw_kernel_reset(LWKernelRef* k) { if(k){k->kernel.reset();k->events.resetProducerSide();} }

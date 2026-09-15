@@ -13,6 +13,7 @@ import AVFoundation
   @Published private(set) var running = false
   private let engine = AVAudioEngine()
   private var kernel: OpaquePointer?
+  private var sourceNode: AVAudioSourceNode?
   private var sceneJSON = DemoScene.canonicalJSON
 
   func setScene(bytes: Data) throws {
@@ -26,24 +27,43 @@ import AVFoundation
     guard let created = lw_kernel_create() else { throw NSError(domain: "Latticewake", code: 1) }
     let prepared = sceneJSON.withCString { lw_kernel_prepare_scene_json(created, $0, format.sampleRate) }
     guard prepared != 0 else { lw_kernel_destroy(created); throw NSError(domain: "Latticewake", code: 2) }
-    kernel = created
-    let node = AVAudioSourceNode { [weak self] _, _, count, audioBufferList -> OSStatus in
-      guard let self, let kernel = self.kernel else { return noErr }
+    let node = AVAudioSourceNode { _, _, count, audioBufferList -> OSStatus in
       let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
       guard let first = buffers.first?.mData?.assumingMemoryBound(to: Float.self) else { return noErr }
-      _ = lw_kernel_render(kernel, first, count)
+      _ = lw_kernel_render(created, first, count)
       for buffer in buffers.dropFirst() {
         guard let pointer = buffer.mData?.assumingMemoryBound(to: Float.self) else { continue }
         for frame in 0..<Int(count) { pointer[frame] = first[frame] }
       }
       return noErr
     }
+    kernel = created
+    sourceNode = node
     engine.attach(node)
     engine.connect(node, to: engine.mainMixerNode, format: format)
-    try engine.start()
+    do {
+      try engine.start()
+    } catch {
+      engine.disconnectNodeOutput(node)
+      engine.detach(node)
+      sourceNode = nil
+      kernel = nil
+      lw_kernel_destroy(created)
+      throw error
+    }
     running = true
   }
-  func stop() { engine.stop(); if let kernel { lw_kernel_destroy(kernel) }; kernel = nil; running = false }
+  func stop() {
+    engine.stop()
+    if let sourceNode {
+      engine.disconnectNodeOutput(sourceNode)
+      engine.detach(sourceNode)
+    }
+    sourceNode = nil
+    if let kernel { lw_kernel_destroy(kernel) }
+    kernel = nil
+    running = false
+  }
   func play(note: Int) { if let kernel { _ = lw_kernel_note_on(kernel, Int32(note), 0.7) } }
   func release(note: Int) { if let kernel { _ = lw_kernel_note_off(kernel, Int32(note)) } }
   func expression(glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_expression(kernel, Float(glide), Float(press), Float(slide)) } }

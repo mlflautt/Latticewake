@@ -15,7 +15,7 @@ The supplied research evidence is preserved intact in
 [`research/source-reports/`](research/source-reports/), with hashes recorded in
 the foundation document.
 
-Run the current contract-only verification with:
+Run the portable core and bridge verification with:
 
 ```bash
 make test
@@ -23,20 +23,18 @@ make test
 
 ## Status
 
-The offline analytic terrain evaluator now has deterministic fixtures for the
-initial Mandelbrot and Julia field families. No audio rendering, UI, MIDI,
-model integration, or creative-performance claim has been implemented or
-auditioned yet.
-Scene v0 now also has strict, deterministic JSON import/export entirely in
-memory; see [the contract](contracts/SCENE_V0.md).
-An offline mono terrain-trace scaffold now provides DC blocking and bounded
-samples for technical tests only; it does not open an audio device or prove a
-listening result.
-Sample-clock transport, preview-only proposals, and an offline 1x/2x/4x
-interpolation/decimation harness are also available as deterministic core
-building blocks, not as a live audio engine.
-The four role lanes now emit bounded offline traces; see the
-[real-time admission gate](docs/REALTIME_ADMISSION.md) before treating any
-core component as callback-safe.
+The portable core provides deterministic analytic terrain, canonical Scene v0
+bytes, offline four-role traces, typed proposal previews, direct-play semantics,
+MPE state primitives, and a fixed-capacity terrain render candidate. The native
+SwiftUI app uses an AVAudioEngine host with a C++ terrain bridge, saved Scene
+bytes, QWERTY direct notes, and trackpad expression.
+
+The C++ bridge now has a fixed SPSC input queue and bridge-level render
+allocation test. It is still not admitted to a device callback: see the
+[real-time admission gate](docs/REALTIME_ADMISSION.md). No target-device
+performance or human listening result is claimed.
+
+The intended product architecture and bounded agent boundary are in
+[the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.

@@ -76,16 +76,60 @@ heard, approved, or preferred.
 - Evidence: mapping, smoothing, snapshot repeatability, and invalid-range tests.
 - Non-goals: native UI, MIDI device I/O, Metal rendering, callback integration, and artistic evaluation.
 
+### Cycle 008 — MPE state primitives
+
+- Scope: portable legacy/lower/upper MPE state handling and per-note expression state.
+- Evidence: deterministic state-machine fixtures.
+- Non-goals: Core MIDI endpoints and audio-callback routing.
+
+### Cycle 009 — product boundary and hardening
+
+- Scope: native Swift package boundary, scene-byte storage, version/license, and CI.
+- Evidence: core and Swift package verification.
+- Non-goals: audible rendering or callback admission.
+
+### Cycle 010 — real-time kernel candidate
+
+- Scope: prepared terrain table, fixed voice/event caps, reset, DC blocking, and limiting.
+- Evidence: normal and sanitizer C++ fixtures.
+- Non-goals: queue handoff, device audio, or callback admission.
+
+### Cycle 011 — audible standalone shell
+
+- Scope: AVAudioEngine prototype, start/stop controls, and runtime status.
+- Evidence: Swift package verification.
+- Non-goals: terrain-kernel bridge proof or human listening evidence.
+
+### Cycles 012–016 — bridge, direct play, and scene lifecycle
+
+- Scope: opaque C ABI, C++ terrain render path, QWERTY note lifecycle,
+  canonical Scene preparation/storage, and trackpad expression events.
+- Evidence: C++ and Swift package checks recorded in their individual handoffs.
+- Non-goals: SPSC queue handoff, Core MIDI device I/O, terrain UI, and callback
+  admission.
+
+### Cycle 017 — bounded real-time bridge handoff
+
+- Scope: fixed SPSC input queue, status/overflow contract, bridge render
+  allocation fixture, and audio closure lifetime narrowing.
+- Evidence: normal, ASan/UBSan, and Swift package verification; see
+  `handoffs/cycle-017.md`.
+- Non-goals: complete AVAudioEngine admission, Core MIDI/MPE device I/O,
+  EngineRack, Metal surface, model provider, or human listening evidence.
+
 ## Next-cycle options
 
-### Cycle 008A — offline MPE state machine
+### Cycle 018 — immutable render-plan publication
 
-Implement lower/upper/legacy MPE decoding and per-note expression state, with no device I/O.
+Define a prepared immutable render plan, safe publication/lifetime ownership,
+and exact bridge-path allocation/lock instrumentation.
 
-### Cycle 008B — native SwiftUI/Metal shell plan
+### Cycle 019 — Terrain Stage snapshots
 
-Create the native-app module boundary and build plan, without joining it to audio yet.
+Publish immutable terrain-frame snapshots to a SwiftUI/Metal 2D surface without
+callback reads of UI state.
 
-### Cycle 008C — scene persistence file boundary
+### Cycle 020 — Core MIDI and MPE input
 
-Add explicit atomic file import/export around the tested Scene bytes.
+Add endpoint lifecycle and a designated input multiplexer around the tested
+legacy/lower/upper MPE state model.

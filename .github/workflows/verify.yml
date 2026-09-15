@@ -10,5 +10,5 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - run: swift build
+      - run: swift test
         working-directory: app

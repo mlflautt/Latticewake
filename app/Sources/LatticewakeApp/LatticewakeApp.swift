@@ -15,7 +15,7 @@ struct ContentView: View {
       Text(String(cString: latticewake_core_version())).foregroundStyle(.secondary)
       Text(audio.running ? "Audition running" : "Ready")
       if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
-      Text("Host-level audition; C++ callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
+      Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
       HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { audio.stop() } }
       Text("Play: A W S E D F T G Y H U J K").font(.caption)
       if !error.isEmpty { Text(error).foregroundStyle(.red) }
