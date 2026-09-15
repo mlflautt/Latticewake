@@ -9,6 +9,8 @@
 #include "sample_transport.hpp"
 #include "scene.hpp"
 #include "scene_serialization.hpp"
+#include "scene_v1.hpp"
+#include "render_plan.hpp"
 #include "terrain_evaluator.hpp"
 #include "terrain_frame.hpp"
 
@@ -198,6 +200,56 @@ void testSceneSerializationBoundary() {
   assert(!parseSceneV0(outOfRange, error).has_value());
 }
 
+void testSceneV1MigrationAndRenderPlan() {
+  using namespace latticewake;
+  Scene source = validScene();
+  source.terrain.kind = "mandelbrot";
+  SceneSerializationError serializationError;
+  const auto sourceBytes = serializeSceneV0(source, serializationError);
+  assert(sourceBytes.has_value());
+  const SceneV1 migrated = migrateSceneV0(source, "fixture-source-hash");
+  assert(validateSceneV1(migrated).empty());
+  assert(migrated.surface.layers[0].analytic.kind == source.terrain.kind);
+  assert(migrated.surface.layers[1].analytic.kind == source.terrain.kind);
+  assert(migrated.surface.morph == 0.0);
+  assert(migrated.lanes.size() == source.roles.size());
+
+  const auto v1Bytes = serializeSceneV1(migrated, serializationError);
+  assert(v1Bytes.has_value());
+  const auto parsed = parseSceneV1(*v1Bytes, serializationError);
+  assert(parsed.has_value());
+  const auto repeated = serializeSceneV1(*parsed, serializationError);
+  assert(repeated.has_value() && *repeated == *v1Bytes);
+  const auto documentScene = parseSceneDocument(*v1Bytes, serializationError);
+  assert(documentScene.has_value());
+  const auto recoveredV0 = serializeSceneV0(*documentScene, serializationError);
+  assert(recoveredV0 == sourceBytes);
+
+  PreparedTerrainPlan legacyPlan{};
+  assert(prepareTerrainPlan(source, 48000, legacyPlan));
+  RenderPlan renderPlan;
+  RenderPlanError renderError;
+  assert(RenderPlanBuilder{}.build(*documentScene, 48000, renderPlan, renderError));
+  assert(renderPlan.ready && renderPlan.sceneId == source.sceneId);
+  assert(renderPlan.terrain.terrainTable == legacyPlan.terrainTable);
+  assert(renderPlan.terrain.morphTable == legacyPlan.morphTable);
+  RoleEventGenerationError roleError;
+  const auto legacyTrace = generateRoleEvents(source, 0, renderPlan.roleLoopFrames,
+                                               {48000, source.harmonicContext.tempoBPM}, roleError);
+  const auto migratedTrace = generateRoleEvents(*documentScene, 0, renderPlan.roleLoopFrames,
+                                                 {48000, documentScene->harmonicContext.tempoBPM}, roleError);
+  assert(legacyTrace.has_value() && migratedTrace.has_value());
+  assert(legacyTrace->canonicalBytes() == migratedTrace->canonicalBytes());
+
+  SceneV1 duplicateId = migrated;
+  duplicateId.traversal.componentId = duplicateId.surface.componentId;
+  assert(hasField(validateSceneV1(duplicateId), "traversal.componentID"));
+  SceneV1 tooManyRoutes = migrated;
+  for (std::size_t index = 0; index <= kMaximumModulationRoutes; ++index)
+    tooManyRoutes.modulation.routes.push_back({"route-" + std::to_string(index), "lfo", "gain", "global", 0.1});
+  assert(hasField(validateSceneV1(tooManyRoutes), "modulationGraph.routes"));
+}
+
 void testOfflineTerrainVoice() {
   using namespace latticewake;
   std::vector<TerrainEvaluation> trace;
@@ -357,6 +409,7 @@ int main() {
   testAnalyticTerrainFixtures();
   testAnalyticTerrainRejectsInvalidInput();
   testSceneSerializationBoundary();
+  testSceneV1MigrationAndRenderPlan();
   testOfflineTerrainVoice();
   testSampleClockTransport();
   testProposalPreviewBoundary();

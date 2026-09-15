@@ -169,4 +169,260 @@ std::optional<Scene> parseSceneV0(const std::string_view bytes, SceneSerializati
   const ValidationIssues issues=validateScene(scene);if(!issues.empty()){error={issues.front().field,issues.front().message};return std::nullopt;}return scene;
 }
 
+namespace {
+std::string_view sourceTypeName(const SurfaceSourceType type) {
+  switch (type) {
+    case SurfaceSourceType::analytic: return "analytic";
+    case SurfaceSourceType::image: return "image";
+    case SurfaceSourceType::audio: return "audio";
+  }
+  return "analytic";
+}
+
+bool optionalString(const JsonObject& value, const std::string_view name,
+                    std::optional<std::string>& out, const std::string_view path,
+                    SceneSerializationError& error) {
+  const Json* input = field(value, name);
+  if (!input || std::holds_alternative<std::nullptr_t>(input->value)) { out = std::nullopt; return true; }
+  const auto* text = string(*input);
+  if (!text) { error = {std::string(path) + "." + std::string(name), "must be a string or null"}; return false; }
+  out = *text;
+  return true;
+}
+
+bool stringArray(const JsonObject& value, const std::string_view name,
+                 std::vector<std::string>& out, const std::string_view path,
+                 SceneSerializationError& error) {
+  const Json* input = field(value, name);
+  const auto* values = input ? array(*input) : nullptr;
+  if (!values) { error = {std::string(path) + "." + std::string(name), "must be an array"}; return false; }
+  for (const auto& item : *values) {
+    const auto* text = string(item);
+    if (!text) { error = {std::string(path) + "." + std::string(name), "entries must be strings"}; return false; }
+    out.push_back(*text);
+  }
+  return true;
+}
+
+void appendStringArray(std::string& out, const std::vector<std::string>& values) {
+  out += '[';
+  for (std::size_t index = 0; index < values.size(); ++index) {
+    if (index) out += ',';
+    appendString(out, values[index]);
+  }
+  out += ']';
+}
+}  // namespace
+
+std::optional<std::string> serializeSceneV1(const SceneV1& scene,
+                                            SceneSerializationError& error) {
+  const ValidationIssues issues = validateSceneV1(scene);
+  if (!issues.empty()) { error = {issues.front().field, issues.front().message}; return std::nullopt; }
+  SceneSerializationError compatibilityError;
+  const auto compatibility = serializeSceneV0(scene.compatibilityScene, compatibilityError);
+  if (!compatibility) { error = compatibilityError; return std::nullopt; }
+
+  std::string out;
+  out.reserve(4096);
+  out += "{\"schemaVersion\":"; appendString(out, scene.schemaVersion);
+  out += ",\"sceneID\":"; appendString(out, scene.sceneId);
+  out += ",\"seed\":"; appendString(out, std::to_string(scene.seed));
+  out += ",\"title\":"; appendString(out, scene.title);
+  out += ",\"surface\":{\"componentID\":"; appendString(out, scene.surface.componentId);
+  out += ",\"layers\":[";
+  for (std::size_t index = 0; index < scene.surface.layers.size(); ++index) {
+    if (index) out += ',';
+    const auto& layer = scene.surface.layers[index];
+    out += "{\"componentID\":"; appendString(out, layer.componentId);
+    out += ",\"sourceType\":"; appendString(out, sourceTypeName(layer.sourceType));
+    out += ",\"assetID\":"; if (layer.asset) appendString(out, layer.asset->assetId); else out += "null";
+    out += ",\"assetHash\":"; if (layer.asset) appendString(out, layer.asset->contentHash); else out += "null";
+    out += ",\"mediaType\":"; if (layer.asset) appendString(out, layer.asset->mediaType); else out += "null";
+    out += '}';
+  }
+  out += "],\"morph\":"; appendNumber(out, scene.surface.morph); out += '}';
+  out += ",\"traversal\":{\"componentID\":"; appendString(out, scene.traversal.componentId);
+  out += ",\"samplingDistribution\":"; appendString(out, scene.traversal.samplingDistribution);
+  out += ",\"deformation\":"; appendNumber(out, scene.traversal.deformation);
+  out += ",\"seed\":"; appendString(out, std::to_string(scene.traversal.seed)); out += '}';
+  const auto& articulation = scene.articulation;
+  out += ",\"articulation\":{\"componentID\":"; appendString(out, articulation.componentId);
+  const std::pair<std::string_view, double> articulationValues[] = {
+      {"attackSeconds", articulation.attackSeconds}, {"releaseSeconds", articulation.releaseSeconds},
+      {"gain", articulation.gain}, {"glideSemitones", articulation.glideSemitones},
+      {"velocityResponse", articulation.velocityResponse}, {"pressureResponse", articulation.pressureResponse},
+      {"slideResponse", articulation.slideResponse}};
+  for (const auto& [name, value] : articulationValues) { out += ",\""; out += name; out += "\":"; appendNumber(out, value); }
+  out += ",\"voiceBehavior\":"; appendString(out, articulation.voiceBehavior); out += '}';
+  out += ",\"harmony\":{\"componentID\":"; appendString(out, scene.harmony.componentId);
+  out += ",\"transportDivision\":"; appendString(out, scene.harmony.transportDivision); out += '}';
+  out += ",\"laneCollection\":[";
+  for (std::size_t index = 0; index < scene.lanes.size(); ++index) {
+    if (index) out += ',';
+    out += "{\"componentID\":"; appendString(out, scene.lanes[index].componentId);
+    out += ",\"name\":"; appendString(out, scene.lanes[index].name); out += '}';
+  }
+  out += ']';
+  out += ",\"modulationGraph\":{\"componentID\":"; appendString(out, scene.modulation.componentId);
+  out += ",\"routes\":[";
+  for (std::size_t index = 0; index < scene.modulation.routes.size(); ++index) {
+    if (index) out += ',';
+    const auto& route = scene.modulation.routes[index];
+    out += "{\"routeID\":"; appendString(out, route.routeId);
+    out += ",\"source\":"; appendString(out, route.source);
+    out += ",\"target\":"; appendString(out, route.target);
+    out += ",\"scope\":"; appendString(out, route.scope);
+    out += ",\"depth\":"; appendNumber(out, route.depth); out += '}';
+  }
+  out += "]}";
+  out += ",\"routing\":{\"componentID\":"; appendString(out, scene.routing.componentId);
+  out += ",\"engineSlots\":"; appendStringArray(out, scene.routing.engineSlots);
+  out += ",\"performanceGroups\":"; appendStringArray(out, scene.routing.performanceGroups); out += '}';
+  out += ",\"lineage\":{\"componentID\":"; appendString(out, scene.lineage.componentId);
+  out += ",\"parentSceneHash\":"; if (scene.lineage.parentSceneHash) appendString(out, *scene.lineage.parentSceneHash); else out += "null";
+  out += ",\"migratedFromSchema\":"; appendString(out, scene.lineage.migratedFromSchema);
+  out += ",\"sourceSceneHash\":"; appendString(out, scene.lineage.sourceSceneHash); out += '}';
+  out += ",\"compatibilitySceneV0\":"; appendString(out, *compatibility); out += '}';
+  return out;
+}
+
+std::optional<SceneV1> parseSceneV1(const std::string_view bytes,
+                                    SceneSerializationError& error) {
+  Parser parser(bytes);
+  const auto root = parser.parse(error);
+  if (!root) return std::nullopt;
+  const auto* top = object(*root);
+  if (!top) { error = {"$", "must be an object"}; return std::nullopt; }
+  const std::set<std::string, std::less<>> topFields = {
+      "schemaVersion", "sceneID", "seed", "title", "surface", "traversal", "articulation",
+      "harmony", "laneCollection", "modulationGraph", "routing", "lineage", "compatibilitySceneV0"};
+  if (!fieldsAreExact(*top, topFields, {}, "$", error)) return std::nullopt;
+  std::string schema, sceneId, title, compatibilityBytes;
+  std::uint64_t seed{};
+  if (!requiredString(*top, "schemaVersion", schema, "$", error) ||
+      !requiredString(*top, "sceneID", sceneId, "$", error) ||
+      !parseSeed(*field(*top, "seed"), seed, error) ||
+      !requiredString(*top, "title", title, "$", error) ||
+      !requiredString(*top, "compatibilitySceneV0", compatibilityBytes, "$", error)) return std::nullopt;
+  SceneSerializationError compatibilityError;
+  const auto compatibility = parseSceneV0(compatibilityBytes, compatibilityError);
+  if (!compatibility) { error = {"compatibilitySceneV0." + compatibilityError.path, compatibilityError.message}; return std::nullopt; }
+  SceneV1 result = migrateSceneV0(*compatibility, "pending-parse");
+  result.schemaVersion = schema; result.sceneId = sceneId; result.seed = seed; result.title = title;
+
+  const auto* surface = object(*field(*top, "surface"));
+  const std::set<std::string, std::less<>> surfaceFields = {"componentID", "layers", "morph"};
+  if (!surface || !fieldsAreExact(*surface, surfaceFields, {}, "surface", error) ||
+      !requiredString(*surface, "componentID", result.surface.componentId, "surface", error) ||
+      !requiredNumber(*surface, "morph", result.surface.morph, "surface", error)) return std::nullopt;
+  const auto* layers = array(*field(*surface, "layers"));
+  if (!layers || layers->size() != 2) { error = {"surface.layers", "must contain exactly two layers"}; return std::nullopt; }
+  const std::set<std::string, std::less<>> layerFields = {"componentID", "sourceType", "assetID", "assetHash", "mediaType"};
+  for (std::size_t index = 0; index < layers->size(); ++index) {
+    const auto* layer = object((*layers)[index]);
+    std::string sourceType;
+    std::optional<std::string> assetId, assetHash, mediaType;
+    if (!layer || !fieldsAreExact(*layer, layerFields, {}, "surface.layers", error) ||
+        !requiredString(*layer, "componentID", result.surface.layers[index].componentId, "surface.layers", error) ||
+        !requiredString(*layer, "sourceType", sourceType, "surface.layers", error) ||
+        !optionalString(*layer, "assetID", assetId, "surface.layers", error) ||
+        !optionalString(*layer, "assetHash", assetHash, "surface.layers", error) ||
+        !optionalString(*layer, "mediaType", mediaType, "surface.layers", error)) return std::nullopt;
+    if (sourceType == "analytic") result.surface.layers[index].sourceType = SurfaceSourceType::analytic;
+    else if (sourceType == "image") result.surface.layers[index].sourceType = SurfaceSourceType::image;
+    else if (sourceType == "audio") result.surface.layers[index].sourceType = SurfaceSourceType::audio;
+    else { error = {"surface.layers.sourceType", "unknown source type"}; return std::nullopt; }
+    const bool anyAsset = assetId || assetHash || mediaType;
+    const bool allAsset = assetId && assetHash && mediaType;
+    if (anyAsset != allAsset) { error = {"surface.layers.asset", "asset fields must be all present or all null"}; return std::nullopt; }
+    if (allAsset) result.surface.layers[index].asset = AssetDescriptor{*assetId, *assetHash, *mediaType};
+  }
+
+  const auto* traversal = object(*field(*top, "traversal"));
+  const std::set<std::string, std::less<>> traversalFields = {"componentID", "samplingDistribution", "deformation", "seed"};
+  if (!traversal || !fieldsAreExact(*traversal, traversalFields, {}, "traversal", error) ||
+      !requiredString(*traversal, "componentID", result.traversal.componentId, "traversal", error) ||
+      !requiredString(*traversal, "samplingDistribution", result.traversal.samplingDistribution, "traversal", error) ||
+      !requiredNumber(*traversal, "deformation", result.traversal.deformation, "traversal", error) ||
+      !parseSeed(*field(*traversal, "seed"), result.traversal.seed, error)) return std::nullopt;
+
+  const auto* articulation = object(*field(*top, "articulation"));
+  const std::set<std::string, std::less<>> articulationFields = {"componentID", "attackSeconds", "releaseSeconds", "gain", "glideSemitones", "velocityResponse", "pressureResponse", "slideResponse", "voiceBehavior"};
+  if (!articulation || !fieldsAreExact(*articulation, articulationFields, {}, "articulation", error) ||
+      !requiredString(*articulation, "componentID", result.articulation.componentId, "articulation", error) ||
+      !requiredNumber(*articulation, "attackSeconds", result.articulation.attackSeconds, "articulation", error) ||
+      !requiredNumber(*articulation, "releaseSeconds", result.articulation.releaseSeconds, "articulation", error) ||
+      !requiredNumber(*articulation, "gain", result.articulation.gain, "articulation", error) ||
+      !requiredNumber(*articulation, "glideSemitones", result.articulation.glideSemitones, "articulation", error) ||
+      !requiredNumber(*articulation, "velocityResponse", result.articulation.velocityResponse, "articulation", error) ||
+      !requiredNumber(*articulation, "pressureResponse", result.articulation.pressureResponse, "articulation", error) ||
+      !requiredNumber(*articulation, "slideResponse", result.articulation.slideResponse, "articulation", error) ||
+      !requiredString(*articulation, "voiceBehavior", result.articulation.voiceBehavior, "articulation", error)) return std::nullopt;
+
+  const auto* harmony = object(*field(*top, "harmony"));
+  const std::set<std::string, std::less<>> harmonyFields = {"componentID", "transportDivision"};
+  if (!harmony || !fieldsAreExact(*harmony, harmonyFields, {}, "harmony", error) ||
+      !requiredString(*harmony, "componentID", result.harmony.componentId, "harmony", error) ||
+      !requiredString(*harmony, "transportDivision", result.harmony.transportDivision, "harmony", error)) return std::nullopt;
+
+  const auto* lanes = array(*field(*top, "laneCollection"));
+  if (!lanes || lanes->size() != result.lanes.size()) { error = {"laneCollection", "must match compatibility lanes"}; return std::nullopt; }
+  const std::set<std::string, std::less<>> laneFields = {"componentID", "name"};
+  for (std::size_t index = 0; index < lanes->size(); ++index) {
+    const auto* lane = object((*lanes)[index]);
+    if (!lane || !fieldsAreExact(*lane, laneFields, {}, "laneCollection", error) ||
+        !requiredString(*lane, "componentID", result.lanes[index].componentId, "laneCollection", error) ||
+        !requiredString(*lane, "name", result.lanes[index].name, "laneCollection", error)) return std::nullopt;
+  }
+
+  const auto* modulation = object(*field(*top, "modulationGraph"));
+  const std::set<std::string, std::less<>> modulationFields = {"componentID", "routes"};
+  if (!modulation || !fieldsAreExact(*modulation, modulationFields, {}, "modulationGraph", error) ||
+      !requiredString(*modulation, "componentID", result.modulation.componentId, "modulationGraph", error)) return std::nullopt;
+  const auto* routes = array(*field(*modulation, "routes"));
+  if (!routes) { error = {"modulationGraph.routes", "must be an array"}; return std::nullopt; }
+  result.modulation.routes.clear();
+  const std::set<std::string, std::less<>> routeFields = {"routeID", "source", "target", "scope", "depth"};
+  for (const auto& routeValue : *routes) {
+    const auto* route = object(routeValue); ModulationRoute parsed;
+    if (!route || !fieldsAreExact(*route, routeFields, {}, "modulationGraph.routes", error) ||
+        !requiredString(*route, "routeID", parsed.routeId, "modulationGraph.routes", error) ||
+        !requiredString(*route, "source", parsed.source, "modulationGraph.routes", error) ||
+        !requiredString(*route, "target", parsed.target, "modulationGraph.routes", error) ||
+        !requiredString(*route, "scope", parsed.scope, "modulationGraph.routes", error) ||
+        !requiredNumber(*route, "depth", parsed.depth, "modulationGraph.routes", error)) return std::nullopt;
+    result.modulation.routes.push_back(std::move(parsed));
+  }
+
+  const auto* routing = object(*field(*top, "routing"));
+  const std::set<std::string, std::less<>> routingFields = {"componentID", "engineSlots", "performanceGroups"};
+  result.routing.engineSlots.clear(); result.routing.performanceGroups.clear();
+  if (!routing || !fieldsAreExact(*routing, routingFields, {}, "routing", error) ||
+      !requiredString(*routing, "componentID", result.routing.componentId, "routing", error) ||
+      !stringArray(*routing, "engineSlots", result.routing.engineSlots, "routing", error) ||
+      !stringArray(*routing, "performanceGroups", result.routing.performanceGroups, "routing", error)) return std::nullopt;
+
+  const auto* lineage = object(*field(*top, "lineage"));
+  const std::set<std::string, std::less<>> lineageFields = {"componentID", "parentSceneHash", "migratedFromSchema", "sourceSceneHash"};
+  if (!lineage || !fieldsAreExact(*lineage, lineageFields, {}, "lineage", error) ||
+      !requiredString(*lineage, "componentID", result.lineage.componentId, "lineage", error) ||
+      !optionalString(*lineage, "parentSceneHash", result.lineage.parentSceneHash, "lineage", error) ||
+      !requiredString(*lineage, "migratedFromSchema", result.lineage.migratedFromSchema, "lineage", error) ||
+      !requiredString(*lineage, "sourceSceneHash", result.lineage.sourceSceneHash, "lineage", error)) return std::nullopt;
+
+  const ValidationIssues issues = validateSceneV1(result);
+  if (!issues.empty()) { error = {issues.front().field, issues.front().message}; return std::nullopt; }
+  return result;
+}
+
+std::optional<Scene> parseSceneDocument(const std::string_view bytes,
+                                        SceneSerializationError& error) {
+  SceneSerializationError v0Error;
+  if (auto scene = parseSceneV0(bytes, v0Error)) return scene;
+  SceneSerializationError v1Error;
+  if (auto scene = parseSceneV1(bytes, v1Error)) return scene->compatibilityScene;
+  error = v1Error.path.empty() ? v0Error : v1Error;
+  return std::nullopt;
+}
+
 }  // namespace latticewake

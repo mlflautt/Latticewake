@@ -9,12 +9,14 @@
 #include <span>
 #include <string_view>
 #include "../../../src/scene.cpp"
+#include "../../../src/scene_v1.cpp"
 #include "../../../src/terrain_evaluator.cpp"
 #include "../../../src/scene_serialization.cpp"
 #include "../../../src/event_trace.cpp"
 #include "../../../src/sample_transport.cpp"
 #include "../../../src/role_event_generator.cpp"
 #include "../../../src/realtime_kernel.cpp"
+#include "../../../src/render_plan.cpp"
 #include "../../../src/realtime_event_queue.hpp"
 #include "../../../src/terrain_frame.cpp"
 #include "../../../src/mpe_state.cpp"
@@ -22,7 +24,6 @@
 namespace {
 constexpr std::uint32_t kNoPlan = 2;
 constexpr std::uint32_t kMaximumCallbackFrames = 4096;
-constexpr std::size_t kMaximumScheduledRoleEvents = 512;
 constexpr std::uint32_t kRoleSourceBase = 100;
 std::uint64_t fnv1a64(const std::string_view bytes) {
   std::uint64_t value = 14695981039346656037ULL;
@@ -38,56 +39,9 @@ void updateMaximum(std::atomic<std::uint64_t>& target, const std::uint64_t candi
 }
 struct RenderPlanSlot {
   latticewake::RealtimeKernel kernel;
-  struct ScheduledRoleEvent { std::uint64_t frame{}; int note{}; bool noteOn{}; std::uint32_t source{}; };
-  struct RolePlan {
-    std::array<ScheduledRoleEvent, kMaximumScheduledRoleEvents> events{};
-    std::uint32_t count{};
-    std::uint64_t loopFrames{};
-  } roles;
+  latticewake::RenderPlan plan;
   std::atomic<std::uint64_t> generation{0};
 };
-
-std::uint32_t sourceForRole(const std::string_view lane) {
-  if(lane=="drone") return kRoleSourceBase;
-  if(lane=="pad") return kRoleSourceBase+1U;
-  if(lane=="motifA") return kRoleSourceBase+2U;
-  return kRoleSourceBase+3U;
-}
-int baseNoteForRole(const std::string_view lane) {
-  if(lane=="drone") return 48;
-  if(lane=="pad") return 60;
-  if(lane=="motifA") return 72;
-  return 76;
-}
-int scaleNote(const latticewake::Scene& scene, const int base, const int degree) {
-  const auto& scale=scene.harmonicContext.scaleDegrees;
-  if(scale.empty()) return base;
-  const int size=static_cast<int>(scale.size());
-  int octave=degree/size;
-  int index=degree%size;
-  if(index<0) { index+=size; --octave; }
-  return std::clamp(base+scale[static_cast<std::size_t>(index)]+12*octave,0,127);
-}
-bool prepareRolePlan(const latticewake::Scene& scene, const double rate, RenderPlanSlot::RolePlan& plan) {
-  const double tempo=scene.harmonicContext.tempoBPM;
-  const auto loop=static_cast<std::uint64_t>(std::llround(rate*60.0/tempo*8.0));
-  if(loop==0) return false;
-  latticewake::RoleEventGenerationError error;
-  const auto trace=latticewake::generateRoleEvents(scene,0,loop,{rate,tempo},error);
-  if(!trace || trace->events().size()>plan.events.size()) return false;
-  plan={}; plan.loopFrames=loop;
-  for(const auto& event:trace->events()) {
-    const auto laneIt=event.payload.find("lane");
-    const auto degreeIt=event.payload.find("degree");
-    if(laneIt==event.payload.end()||degreeIt==event.payload.end()) return false;
-    int degree=0;
-    try { degree=std::stoi(degreeIt->second); } catch(...) { return false; }
-    const auto lane=std::string_view(laneIt->second);
-    const int note=scaleNote(scene,baseNoteForRole(lane),degree);
-    plan.events[plan.count++]={event.sampleOffset%loop,note,event.type==latticewake::EventType::noteOn,sourceForRole(lane)};
-  }
-  return true;
-}
 }
 
 struct LWKernelRef {
@@ -127,11 +81,13 @@ static latticewake::Scene demoScene() {
   scene.roles={{RoleId::drone,true,0.5,0.5,{0},{{RhythmStepKind::note}},0,0,"internal",""},{RoleId::pad,true,0.5,0.5,{0},{{RhythmStepKind::note}},0,1,"internal",""},{RoleId::motifA,true,0.5,0.5,{0},{{RhythmStepKind::note}},0,2,"internal",""},{RoleId::motifB,true,0.5,0.5,{0},{{RhythmStepKind::note}},0,3,"internal",""}};
   return scene;
 }
-const char* latticewake_core_version(void) { return "portable-core-boundary-v0"; }
+const char* latticewake_core_version(void) { return "portable-core-boundary-v1"; }
 LWKernelRef* lw_kernel_create(void) { return new (std::nothrow) LWKernelRef; }
 void lw_kernel_destroy(LWKernelRef* kernel) { delete kernel; }
 static int prepareInitial(LWKernelRef* kernel,const latticewake::Scene& scene,const double rate) {
-  if(!kernel||kernel->renderBegun.load(std::memory_order_acquire)||!kernel->plans[0].kernel.prepare(scene,rate)||!prepareRolePlan(scene,rate,kernel->plans[0].roles))return 0;
+  latticewake::RenderPlanError error;
+  latticewake::RenderPlanBuilder builder;
+  if(!kernel||kernel->renderBegun.load(std::memory_order_acquire)||!builder.build(scene,rate,kernel->plans[0].plan,error)||!kernel->plans[0].kernel.activate(kernel->plans[0].plan.terrain))return 0;
   kernel->plans[0].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->activePlan.store(0,std::memory_order_release);
   kernel->pendingPlan.store(kNoPlan,std::memory_order_release);
@@ -147,19 +103,21 @@ static int publishPlan(LWKernelRef* kernel,const latticewake::Scene& scene,const
   if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
   const std::uint32_t active=kernel->activePlan.load(std::memory_order_acquire);
   const std::uint32_t candidate=1U-active;
-  if(!kernel->plans[candidate].kernel.prepare(scene,rate)||!prepareRolePlan(scene,rate,kernel->plans[candidate].roles))return 0;
+  latticewake::RenderPlanError error;
+  latticewake::RenderPlanBuilder builder;
+  if(!builder.build(scene,rate,kernel->plans[candidate].plan,error)||!kernel->plans[candidate].kernel.activate(kernel->plans[candidate].plan.terrain))return 0;
   kernel->plans[candidate].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->pendingPlan.store(candidate,std::memory_order_release);
   return 1;
 }
 int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return prepareInitial(kernel,demoScene(),rate); }
-int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);return scene?prepareInitial(kernel,*scene,rate):0; }
+int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);return scene?prepareInitial(kernel,*scene,rate):0; }
 int lw_kernel_publish_demo(LWKernelRef* kernel,double rate) { return publishPlan(kernel,demoScene(),rate); }
-int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);return scene?publishPlan(kernel,*scene,rate):0; }
+int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);return scene?publishPlan(kernel,*scene,rate):0; }
 int lw_terrain_frame_scene_json(const char* json,const unsigned long long sampleOffset,const double startPhase,const double phaseStep,LWTerrainFramePoint* points,const unsigned int capacity,unsigned int* pointCount) {
   if(!json||!points||!pointCount||capacity==0)return 0;
   latticewake::SceneSerializationError parseError;
-  const auto scene=latticewake::parseSceneV0(json,parseError);
+  const auto scene=latticewake::parseSceneDocument(json,parseError);
   if(!scene)return 0;
   latticewake::TerrainFrameError frameError;
   const auto frame=latticewake::buildTerrainFrame(*scene,{sampleOffset,startPhase,phaseStep,capacity},frameError);
@@ -171,12 +129,27 @@ int lw_terrain_frame_scene_json(const char* json,const unsigned long long sample
   *pointCount=static_cast<unsigned int>(frame->points.size());
   return 1;
 }
-int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,0};return 1; }
-int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,const LWRoleControl* control,char** canonicalJson) { if(!json||!control||!canonicalJson||control->pattern>3U)return 0;latticewake::SceneSerializationError error;auto scene=latticewake::parseSceneV0(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;auto& role=scene->roles[roleIndex];role.enabled=control->enabled!=0;role.range=control->range;role.density=control->density;role.seedOffset=control->seed_offset;switch(control->pattern){case 0:role.pattern={0};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 1:role.pattern={0,2,4};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 2:role.pattern={4,2,0};role.rhythm={{latticewake::RhythmStepKind::note}};break;default:role.pattern={0,1,2,1};role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}};break;}const auto serialized=latticewake::serializeSceneV0(*scene,error);if(!serialized)return 0;char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1; }
+int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,0};return 1; }
+int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,const LWRoleControl* control,char** canonicalJson) {
+  if(!json||!control||!canonicalJson||control->pattern>3U)return 0;
+  latticewake::SceneSerializationError error;
+  auto v1=latticewake::parseSceneV1(json,error);
+  auto scene=v1?std::optional<latticewake::Scene>(v1->compatibilityScene):latticewake::parseSceneV0(json,error);
+  if(!scene||roleIndex>=scene->roles.size())return 0;
+  auto& role=scene->roles[roleIndex];
+  role.enabled=control->enabled!=0;role.range=control->range;role.density=control->density;role.seedOffset=control->seed_offset;
+  switch(control->pattern){case 0:role.pattern={0};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 1:role.pattern={0,2,4};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 2:role.pattern={4,2,0};role.rhythm={{latticewake::RhythmStepKind::note}};break;default:role.pattern={0,1,2,1};role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}};break;}
+  std::optional<std::string> serialized;
+  if(v1){v1->compatibilityScene=*scene;v1->lanes[roleIndex].role=role;serialized=latticewake::serializeSceneV1(*v1,error);}
+  else serialized=latticewake::serializeSceneV0(*scene,error);
+  if(!serialized)return 0;
+  char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;
+  std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;
+}
 int lw_role_preview_scene_json(const char* json,const unsigned long long startSample,const unsigned long long frames,const double sampleRate,LWRoleTraceSummary* summary) {
   if(!json||!summary||frames==0)return 0;
   latticewake::SceneSerializationError parseError;
-  const auto scene=latticewake::parseSceneV0(json,parseError);
+  const auto scene=latticewake::parseSceneDocument(json,parseError);
   if(!scene)return 0;
   latticewake::RoleEventGenerationError generationError;
   const auto trace=latticewake::generateRoleEvents(*scene,startSample,frames,{sampleRate,scene->harmonicContext.tempoBPM},generationError);
@@ -185,6 +158,27 @@ int lw_role_preview_scene_json(const char* json,const unsigned long long startSa
   const std::string bytes=trace->canonicalBytes();
   *summary={static_cast<unsigned long long>(events.size()),events.empty()?0ULL:events.front().sampleOffset,events.empty()?0ULL:events.back().sampleOffset,fnv1a64(bytes)};
   return 1;
+}
+int lw_scene_migrate_v1_json(const char* json,const char* sourceHash,char** canonicalJson) {
+  if(!json||!sourceHash||sourceHash[0]=='\0'||!canonicalJson)return 0;
+  latticewake::SceneSerializationError error;
+  if(const auto existing=latticewake::parseSceneV1(json,error)) {
+    const auto serialized=latticewake::serializeSceneV1(*existing,error);
+    if(!serialized)return 0;
+    char* result=static_cast<char*>(std::malloc(serialized->size()+1U));
+    if(!result)return 0;
+    std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;
+  }
+  const auto scene=latticewake::parseSceneV0(json,error);
+  if(!scene)return 0;
+  const auto canonicalV0=latticewake::serializeSceneV0(*scene,error);
+  if(!canonicalV0)return 0;
+  const auto migrated=latticewake::migrateSceneV0(*scene,sourceHash);
+  const auto serialized=latticewake::serializeSceneV1(migrated,error);
+  if(!serialized)return 0;
+  char* result=static_cast<char*>(std::malloc(serialized->size()+1U));
+  if(!result)return 0;
+  std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;
 }
 void lw_string_destroy(char* value) { std::free(value); }
 int lw_kernel_note_on_source(LWKernelRef* k,int n,float v,unsigned int source) { return k&&k->events.tryPush({0,true,n,v,0,1,0,false,source}) ? 1 : 0; }
@@ -202,7 +196,7 @@ void lw_kernel_set_roles_running(LWKernelRef* k,unsigned int running) {
 int lw_kernel_role_status(const LWKernelRef* k,LWRoleStatus* status) {
   if(!k||!status) return 0;
   const auto active=k->activePlan.load(std::memory_order_acquire);
-  *status={k->rolesRunning.load(std::memory_order_acquire)?1U:0U,k->activeRoleLanes.load(std::memory_order_acquire),k->plans[active].roles.loopFrames};
+  *status={k->rolesRunning.load(std::memory_order_acquire)?1U:0U,k->activeRoleLanes.load(std::memory_order_acquire),k->plans[active].plan.roleLoopFrames};
   return 1;
 }
 int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
@@ -217,7 +211,7 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   }
   std::array<latticewake::KernelEvent,latticewake::RealtimeKernel::kMaxEvents> events{};
   std::size_t count=0;
-  auto pushRole=[&](const RenderPlanSlot::ScheduledRoleEvent& scheduled,const unsigned int frame) {
+  auto pushRole=[&](const latticewake::PreparedRoleEvent& scheduled,const unsigned int frame) {
     if(count>=events.size()) return;
     events[count++]={frame,scheduled.noteOn,scheduled.note,scheduled.noteOn?0.35F:0.0F,0,1,0,false,scheduled.source};
     const auto lane=scheduled.source-kRoleSourceBase;
@@ -233,19 +227,19 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   if(k->rolesRunning.load(std::memory_order_acquire)) {
     const std::uint32_t currentActive=k->activePlan.load(std::memory_order_acquire);
     if(k->roleStartRequested.exchange(false,std::memory_order_acq_rel)) { k->roleSampleOffset=0; k->rolePlanIndex=currentActive; }
-    auto& rolePlan=k->plans[k->rolePlanIndex].roles;
-    if(rolePlan.loopFrames>0) {
+    auto& rolePlan=k->plans[k->rolePlanIndex].plan;
+    if(rolePlan.roleLoopFrames>0) {
       const std::uint64_t begin=k->roleSampleOffset;
       const std::uint64_t end=begin+frames;
-      const bool wraps=end>=rolePlan.loopFrames;
-      for(std::uint32_t index=0;index<rolePlan.count&&count<events.size();++index) {
-        const auto& scheduled=rolePlan.events[index];
-        if((!wraps&&scheduled.frame>=begin&&scheduled.frame<end) || (wraps&&(scheduled.frame>=begin||scheduled.frame<(end%rolePlan.loopFrames)))) {
-          const auto relative=scheduled.frame>=begin?scheduled.frame-begin:rolePlan.loopFrames-begin+scheduled.frame;
+      const bool wraps=end>=rolePlan.roleLoopFrames;
+      for(std::uint32_t index=0;index<rolePlan.roleEventCount&&count<events.size();++index) {
+        const auto& scheduled=rolePlan.roleEvents[index];
+        if((!wraps&&scheduled.frame>=begin&&scheduled.frame<end) || (wraps&&(scheduled.frame>=begin||scheduled.frame<(end%rolePlan.roleLoopFrames)))) {
+          const auto relative=scheduled.frame>=begin?scheduled.frame-begin:rolePlan.roleLoopFrames-begin+scheduled.frame;
           pushRole(scheduled,static_cast<unsigned int>(relative));
         }
       }
-      k->roleSampleOffset=end%rolePlan.loopFrames;
+      k->roleSampleOffset=end%rolePlan.roleLoopFrames;
       if(wraps) k->rolePlanIndex=currentActive;
     }
   }

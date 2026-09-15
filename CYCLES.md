@@ -256,3 +256,19 @@ observations remain separate evidence.
 Introduce Scene v1 and one portable `RenderPlanBuilder`, including deterministic
 canonicalization, in-memory Scene v0 migration, stable component identities,
 byte-preserved legacy files, and equivalent migrated render fixtures.
+
+### Cycle 033 — Scene v1 and RenderPlanBuilder
+
+- Scope: component-addressable Scene v1, deterministic in-memory Scene v0
+  migration, two identified Surface layers, stable component IDs, reserved
+  media asset descriptors, and one portable preparation authority.
+- Runtime: the C bridge accepts v0 or v1 and builds terrain tables plus bounded
+  role timing through `RenderPlanBuilder`. Explicit Save As writes Scene v1
+  inside the existing performance-library envelope; legacy source bytes are
+  never rewritten.
+- Evidence: canonical v1 round trip, duplicate-ID/route-cap validation,
+  v0-to-v1 render-buffer equivalence, role-trace equivalence, bridge migration,
+  role editing without schema downgrade, normal/sanitizer suites, signed app,
+  and hosted Swift fixtures. See `handoffs/cycle-033.md`.
+- Retained work: component editors, media analysis, modulation execution, and
+  expanded named lanes begin in Cycles 036–040. Cycle 034 is the next target.

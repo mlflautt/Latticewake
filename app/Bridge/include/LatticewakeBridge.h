@@ -57,6 +57,7 @@ int lw_scene_apply_role_control(const char* json, unsigned int role_index,
 int lw_role_preview_scene_json(const char* json, unsigned long long start_sample,
                                unsigned long long frames, double sample_rate,
                                LWRoleTraceSummary* summary);
+int lw_scene_migrate_v1_json(const char* json, const char* source_hash, char** canonical_json);
 void lw_string_destroy(char* value);
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);
 int lw_kernel_note_off(LWKernelRef* kernel, int note);

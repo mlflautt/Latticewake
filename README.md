@@ -10,7 +10,8 @@ new product foundation, not a modification to the existing SuperDirt palette or
 composition lineage.
 
 Start with [the foundation](docs/FOUNDATION.md). The first shared semantic
-contract is [Scene v0](contracts/SCENE_V0.md).
+contract is [Scene v0](contracts/SCENE_V0.md); the component-addressable
+[Scene v1](contracts/SCENE_V1.md) is now the explicit-save format.
 The supplied research evidence is preserved intact in
 [`research/source-reports/`](research/source-reports/), with hashes recorded in
 the foundation document.
@@ -25,7 +26,8 @@ make test
 
 The portable core provides deterministic analytic terrain, canonical Scene v0
 bytes, offline four-role traces, typed proposal previews, direct-play semantics,
-MPE state primitives, and a fixed-capacity terrain render candidate. The native
+MPE state primitives, deterministic Scene v1 migration, and a portable
+RenderPlanBuilder. The native
 SwiftUI app uses an AVAudioEngine host with a C++ terrain bridge, saved Scene
 bytes, QWERTY direct notes, and trackpad expression.
 
@@ -71,3 +73,4 @@ The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.
+The consolidated delivery sequence is [Roadmap v3](docs/DEVELOPMENT_ROADMAP_V3.md).

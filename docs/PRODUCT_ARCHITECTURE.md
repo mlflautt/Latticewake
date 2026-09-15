@@ -26,9 +26,10 @@ not baseline commitments.
 The C++ core owns canonical scene interpretation and audio rendering. SwiftUI,
 Metal, Core Audio, Core MIDI, and a future AUv3 are adapters.
 
-The current core has one prepared terrain voice. Before the EngineRack, Scene
-v1 separates **Surface**, **Traversal**, and **Articulation**, and one portable
-RenderPlanBuilder becomes the preparation authority. The later internal
+The current core has one prepared terrain voice. Scene v1 now separates
+**Surface**, **Traversal**, and **Articulation**, and one portable
+RenderPlanBuilder is the preparation authority for terrain tables and bounded
+role timing. The later internal
 **EngineRack** provides prepared slots with a stable expressive contract for
 note identity, pitch/glide, velocity, pressure, slide, timbre, modulation,
 gate, and panic. Terrain remains the signature engine; a terrain-excited
@@ -78,8 +79,8 @@ until proposal preview/commit is working.
 ## Release progression
 
 1. Admit the standalone C++ bridge through measurable real-time evidence.
-2. Introduce Scene v1, the prepared RenderPlanBuilder, and the luminous Metal
-   Terrain Stage; complete direct-play and MPE admission.
+2. Build the luminous Metal Terrain Stage on the completed Scene v1 and
+   RenderPlanBuilder foundations; complete direct-play and MPE admission.
 3. Add Surface/Traversal/Articulation editing, modulation, audio-derived
    surfaces, Freeze and Grow, and deeper deterministic lanes.
 4. Introduce the EngineRack, a resonator engine, prepared buses/effects, scene

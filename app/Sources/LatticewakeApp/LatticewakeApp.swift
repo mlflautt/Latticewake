@@ -170,9 +170,11 @@ struct ContentView: View {
     panel.nameFieldStringValue = "Latticewake Scene.latticewake.json"
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
-      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: sceneBytes, as: UTF8.self), performance: performance)
+      let migrated = try SceneDocumentBridge.canonicalV1(from: sceneBytes)
+      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance)
       let saved = try SceneLibrary.save(document, to: url)
-      sceneURL = url; isDirty = false; receipt = "Saved \(String(saved.sha256.prefix(12)))"
+      sceneBytes = migrated; sceneURL = url; isDirty = false
+      receipt = "Saved Scene v1 \(String(saved.sha256.prefix(12)))"
     } catch { self.error = error.localizedDescription }
   }
 

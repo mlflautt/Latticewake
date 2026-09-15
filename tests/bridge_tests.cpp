@@ -1,11 +1,13 @@
 #include "LatticewakeBridge.h"
 
 #include <array>
+#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cmath>
 #include <cstdlib>
 #include <new>
+#include <string_view>
 
 namespace {
 
@@ -97,6 +99,43 @@ void testTerrainFrameSnapshotBoundary() {
   }
   assert(lw_terrain_frame_scene_json(kCanonicalScene, 0, 0.0, 0.0,
                                      first.data(), 0, &firstCount) == 0);
+}
+
+void testSceneV1BridgeMigrationAndPreparation() {
+  char* first = nullptr;
+  char* repeated = nullptr;
+  assert(lw_scene_migrate_v1_json(kCanonicalScene, "sha256:fixture", &first) == 1);
+  assert(first != nullptr);
+  assert(lw_scene_migrate_v1_json(kCanonicalScene, "sha256:fixture", &repeated) == 1);
+  assert(repeated != nullptr);
+  assert(std::string_view(first) == std::string_view(repeated));
+  assert(std::string_view(first).find("\"schemaVersion\":\"latticewake-scene-v1\"") != std::string_view::npos);
+
+  LWKernelRef* const kernel = lw_kernel_create();
+  LWKernelRef* const legacyKernel = lw_kernel_create();
+  assert(kernel != nullptr && legacyKernel != nullptr);
+  assert(lw_kernel_prepare_scene_json(kernel, first, 48000.0) == 1);
+  assert(lw_kernel_prepare_scene_json(legacyKernel, kCanonicalScene, 48000.0) == 1);
+  std::array<float, 512> output{};
+  std::array<float, 512> legacyOutput{};
+  assert(lw_kernel_note_on(kernel, 60, 0.7F) == 1);
+  assert(lw_kernel_note_on(legacyKernel, 60, 0.7F) == 1);
+  assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+  assert(lw_kernel_render(legacyKernel, legacyOutput.data(), static_cast<unsigned int>(legacyOutput.size())) == 1);
+  assert(output == legacyOutput);
+
+  LWRoleControl control{};
+  assert(lw_scene_role_control(first, 0, &control) == 1);
+  control.density = 0.75F;
+  char* edited = nullptr;
+  assert(lw_scene_apply_role_control(first, 0, &control, &edited) == 1);
+  assert(edited != nullptr);
+  assert(std::string_view(edited).find("\"schemaVersion\":\"latticewake-scene-v1\"") != std::string_view::npos);
+  lw_string_destroy(edited);
+  lw_kernel_destroy(legacyKernel);
+  lw_kernel_destroy(kernel);
+  lw_string_destroy(repeated);
+  lw_string_destroy(first);
 }
 
 void testMpeBridgeState() {
@@ -243,6 +282,7 @@ int main() {
   testBoundedQueueAndRender();
   testQueueResetAndInvalidStatus();
   testTerrainFrameSnapshotBoundary();
+  testSceneV1BridgeMigrationAndPreparation();
   testMpeBridgeState();
   testRoleControlCanonicalBoundary();
   testRolePreviewBoundary();

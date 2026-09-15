@@ -117,6 +117,23 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(saved.sha256, loaded.receipt.sha256)
 }
 
+  func testSceneV1MigrationIsDeterministicAndLoadable() throws {
+    let source = Data(DemoScene.fourRoleJSON.utf8)
+    let first = try SceneDocumentBridge.canonicalV1(from: source)
+    let repeated = try SceneDocumentBridge.canonicalV1(from: source)
+    XCTAssertEqual(first, repeated)
+    XCTAssertTrue(String(decoding: first, as: UTF8.self).contains("\"latticewake-scene-v1\""))
+
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("scene.latticewake.json")
+    let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: first, as: UTF8.self))
+    _ = try SceneLibrary.save(document, to: url)
+    let loaded = try SceneLibrary.load(from: url)
+    XCTAssertEqual(loaded.sceneBytes, first)
+  }
+
   func testSceneUndoIsBoundedAndRestoresPrecedingBytes() {
   var history = SceneUndoHistory()
   let first = Data("first".utf8), second = Data("second".utf8)
