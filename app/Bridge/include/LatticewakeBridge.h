@@ -18,6 +18,13 @@ typedef struct LWTerrainFramePoint {
   unsigned int iterations;
   unsigned int escaped;
 } LWTerrainFramePoint;
+typedef struct LWRoleControl {
+  unsigned int enabled;
+  float range;
+  float density;
+  unsigned long long seed_offset;
+  unsigned int pattern;
+} LWRoleControl;
 LWKernelRef* lw_kernel_create(void);
 void lw_kernel_destroy(LWKernelRef* kernel);
 int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
@@ -28,6 +35,10 @@ int lw_terrain_frame_scene_json(const char* json, unsigned long long sample_offs
                                 double start_phase, double phase_step,
                                 LWTerrainFramePoint* points, unsigned int capacity,
                                 unsigned int* point_count);
+int lw_scene_role_control(const char* json, unsigned int role_index, LWRoleControl* control);
+int lw_scene_apply_role_control(const char* json, unsigned int role_index,
+                                const LWRoleControl* control, char** canonical_json);
+void lw_string_destroy(char* value);
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);
 int lw_kernel_note_off(LWKernelRef* kernel, int note);
 int lw_kernel_expression(LWKernelRef* kernel, float glide, float press, float slide);

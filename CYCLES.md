@@ -154,9 +154,15 @@ heard, approved, or preferred.
 - Non-goals: hardware MPE session, zone voice stealing, MIDI output, callback
   admission, or human listening evidence.
 
-## Next-cycle options
-
 ### Cycle 022 — four-role performance controls
 
-Expose initial role enable/density/range/pattern/seed controls, deterministic
-offline replay, and visible trace status without callback UI reads.
+- Scope: explicit canonical Scene role edits and saved-scene/terrain-plan refresh.
+- Evidence: deterministic role-control bridge round trip and normal/sanitizer/Swift checks; see `handoffs/cycle-022.md`.
+- Non-goals: live role sequencing, callback UI reads, human audition, or creative selection.
+
+## Next-cycle options
+
+### Cycle 023 — role-event preview and replay
+
+Expose deterministic offline role traces as preview-only material and surface
+their receipt/status without routing them into the audio callback yet.

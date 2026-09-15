@@ -1,0 +1,95 @@
+import Foundation
+import SwiftUI
+
+private struct BridgeRoleControl {
+  var enabled: UInt32 = 1
+  var range: Float = 0.5
+  var density: Float = 0.5
+  var seedOffset: UInt64 = 0
+  var pattern: UInt32 = 0
+}
+
+@_silgen_name("lw_scene_role_control") private func lw_scene_role_control(
+  _ json: UnsafePointer<CChar>, _ roleIndex: UInt32, _ control: UnsafeMutablePointer<BridgeRoleControl>
+) -> Int32
+@_silgen_name("lw_scene_apply_role_control") private func lw_scene_apply_role_control(
+  _ json: UnsafePointer<CChar>, _ roleIndex: UInt32, _ control: UnsafePointer<BridgeRoleControl>,
+  _ canonicalJSON: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
+) -> Int32
+@_silgen_name("lw_string_destroy") private func lw_string_destroy(_ value: UnsafeMutablePointer<CChar>)
+
+struct RoleControl: Identifiable, Equatable {
+  let id: Int
+  var enabled: Bool
+  var range: Double
+  var density: Double
+  var seedOffset: UInt64
+  var pattern: Int
+  static let names = ["Drone", "Pad", "Motif A", "Motif B"]
+  static let patterns = ["Held", "Rise", "Fall", "Pulse"]
+}
+
+enum RoleSceneBridge {
+  static func controls(from bytes: Data) throws -> [RoleControl] {
+    guard let json = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 20) }
+    return try (0..<4).map { index in
+      var control = BridgeRoleControl()
+      guard json.withCString({ lw_scene_role_control($0, UInt32(index), &control) }) != 0 else {
+        throw NSError(domain: "Latticewake", code: 21)
+      }
+      return RoleControl(id: index, enabled: control.enabled != 0, range: Double(control.range),
+                         density: Double(control.density), seedOffset: control.seedOffset,
+                         pattern: Int(control.pattern))
+    }
+  }
+
+  static func apply(_ controls: [RoleControl], to bytes: Data) throws -> Data {
+    var result = bytes
+    for control in controls {
+      guard let json = String(data: result, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 22) }
+      var bridge = BridgeRoleControl(enabled: control.enabled ? 1 : 0, range: Float(control.range),
+                                     density: Float(control.density), seedOffset: control.seedOffset,
+                                     pattern: UInt32(control.pattern))
+      var output: UnsafeMutablePointer<CChar>?
+      let success = json.withCString { source in
+        withUnsafePointer(to: &bridge) { input in
+          lw_scene_apply_role_control(source, UInt32(control.id), input, &output)
+        }
+      }
+      guard success != 0, let output else { throw NSError(domain: "Latticewake", code: 23) }
+      defer { lw_string_destroy(output) }
+      result = Data(String(cString: output).utf8)
+    }
+    return result
+  }
+}
+
+struct RoleControlsView: View {
+  @Binding var controls: [RoleControl]
+  let apply: () -> Void
+
+  var body: some View {
+    DisclosureGroup("Four Roles") {
+      ForEach($controls) { $control in
+        VStack(alignment: .leading, spacing: 5) {
+          HStack {
+            Toggle(RoleControl.names[control.id], isOn: $control.enabled)
+            Spacer()
+            Picker("Pattern", selection: $control.pattern) {
+              ForEach(RoleControl.patterns.indices, id: \.self) { Text(RoleControl.patterns[$0]).tag($0) }
+            }.labelsHidden().frame(width: 100)
+          }
+          HStack {
+            Text("Density").font(.caption)
+            Slider(value: $control.density, in: 0...1)
+            Text("Range").font(.caption)
+            Slider(value: $control.range, in: 0...1)
+            Stepper("Seed \(control.seedOffset)", value: $control.seedOffset, in: 0...9999)
+              .font(.caption).frame(width: 112)
+          }
+        }.padding(.vertical, 3)
+      }
+      Button("Apply Role Changes", action: apply).buttonStyle(.borderedProminent)
+    }.frame(maxWidth: .infinity, alignment: .leading)
+  }
+}

@@ -11,6 +11,9 @@ struct ContentView: View {
   @StateObject private var midi = MIDIIngress()
   @State private var error = ""
   @State private var receipt = ""
+  @State private var sceneBytes = Data()
+  @State private var sceneURL: URL?
+  @State private var roles: [RoleControl] = []
   var body: some View {
     VStack(spacing: 14) {
       Text("Latticewake").font(.largeTitle)
@@ -18,6 +21,9 @@ struct ContentView: View {
         Text("Terrain Stage").font(.headline)
         Spacer()
         Text(audio.running ? "Audition running" : "Ready").foregroundStyle(.secondary)
+      }
+      if !roles.isEmpty {
+        RoleControlsView(controls: $roles, apply: applyRoleChanges)
       }
       TerrainStageView(snapshot: terrain.snapshot)
         .frame(height: 280)
@@ -49,6 +55,9 @@ struct ContentView: View {
         let (bytes, loaded) = try SceneStore.loadCanonical(from: url)
         try audio.setScene(bytes: bytes)
         try terrain.prepare(sceneBytes: bytes)
+        roles = try RoleSceneBridge.controls(from: bytes)
+        sceneBytes = bytes
+        sceneURL = url
         receipt = String(loaded.sha256.prefix(12))
       } catch { self.error = error.localizedDescription }
       midi.start(audio: audio)
@@ -58,5 +67,16 @@ struct ContentView: View {
       if press.phase == .down { audio.play(note: note) } else { audio.release(note: note) }
       return .handled
     }.onDisappear { midi.stop(); audio.stop() }
+  }
+
+  private func applyRoleChanges() {
+    do {
+      let updated = try RoleSceneBridge.apply(roles, to: sceneBytes)
+      try audio.setScene(bytes: updated)
+      try terrain.prepare(sceneBytes: updated)
+      if let sceneURL { receipt = String(try SceneStore.saveCanonical(updated, to: sceneURL).sha256.prefix(12)) }
+      sceneBytes = updated
+      error = ""
+    } catch { self.error = error.localizedDescription }
   }
 }

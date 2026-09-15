@@ -113,6 +113,21 @@ void testMpeBridgeState() {
   assert(lw_mpe_state_create(3, 1, 1) == nullptr);
 }
 
+void testRoleControlCanonicalBoundary() {
+  LWRoleControl control{};
+  assert(lw_scene_role_control(kCanonicalScene, 2, &control) == 1);
+  control.enabled = 0;
+  control.density = 0.75F;
+  control.seed_offset = 99;
+  control.pattern = 2;
+  char* updated = nullptr;
+  assert(lw_scene_apply_role_control(kCanonicalScene, 2, &control, &updated) == 1);
+  LWRoleControl repeated{};
+  assert(lw_scene_role_control(updated, 2, &repeated) == 1);
+  assert(repeated.enabled == 0U && repeated.density == 0.75F && repeated.seed_offset == 99U);
+  lw_string_destroy(updated);
+}
+
 }  // namespace
 
 void* operator new(const std::size_t size) {
@@ -138,5 +153,6 @@ int main() {
   testQueueResetAndInvalidStatus();
   testTerrainFrameSnapshotBoundary();
   testMpeBridgeState();
+  testRoleControlCanonicalBoundary();
   return 0;
 }

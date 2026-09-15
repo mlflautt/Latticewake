@@ -44,6 +44,10 @@ it has not received a hardware session, MIDI output support, or per-note MPE
 voice-rendering hardware proof. The portable kernel does retain expression per
 fixed voice and has deterministic fixtures for note-specific routing.
 
+The Stage also exposes four draft role controls. Applying them is explicit: it
+writes validated canonical Scene bytes, then refreshes the prepared scene and
+terrain snapshot; it does not yet schedule role notes in the audio callback.
+
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see
