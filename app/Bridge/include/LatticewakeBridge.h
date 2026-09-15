@@ -11,6 +11,12 @@ typedef struct LWKernelStatus {
   unsigned long long active_plan_generation;
   unsigned long long pending_plan_generation;
 } LWKernelStatus;
+typedef struct LWCallbackStatus {
+  unsigned long long callback_count;
+  unsigned long long rendered_frames;
+  unsigned long long render_failures;
+  unsigned int maximum_callback_frames;
+} LWCallbackStatus;
 typedef struct LWTerrainFramePoint {
   float value;
   float path_x;
@@ -54,6 +60,8 @@ int lw_kernel_expression(LWKernelRef* kernel, float glide, float press, float sl
 int lw_kernel_note_expression(LWKernelRef* kernel, int note, float glide, float press, float slide);
 int lw_kernel_render(LWKernelRef* kernel, float* output, unsigned int frames);
 int lw_kernel_status(const LWKernelRef* kernel, LWKernelStatus* status);
+int lw_kernel_callback_status(const LWKernelRef* kernel, LWCallbackStatus* status);
+unsigned int lw_kernel_maximum_callback_frames(void);
 unsigned int lw_kernel_event_queue_capacity(void);
 void lw_kernel_reset(LWKernelRef* kernel);
 LWMpeStateRef* lw_mpe_state_create(unsigned int mode, int master_channel, int member_count);

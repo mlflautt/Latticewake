@@ -20,6 +20,7 @@
 
 namespace {
 constexpr std::uint32_t kNoPlan = 2;
+constexpr std::uint32_t kMaximumCallbackFrames = 4096;
 std::uint64_t fnv1a64(const std::string_view bytes) {
   std::uint64_t value = 14695981039346656037ULL;
   for (const unsigned char byte : bytes) {
@@ -41,6 +42,9 @@ struct LWKernelRef {
   alignas(64) std::atomic<std::uint32_t> pendingPlan{kNoPlan};
   std::atomic<std::uint64_t> nextGeneration{1};
   std::atomic<bool> renderBegun{false};
+  alignas(64) std::atomic<std::uint64_t> callbackCount{0};
+  std::atomic<std::uint64_t> renderedFrames{0};
+  std::atomic<std::uint64_t> renderFailures{0};
 };
 
 struct LWMpeStateRef {
@@ -117,6 +121,7 @@ int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { r
 int lw_kernel_note_expression(LWKernelRef* k,int note,float glide,float press,float slide) { return k&&note>=0&&note<=127&&k->events.tryPush({0,false,note,0,glide,press,slide,true}) ? 1 : 0; }
 int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   if(!k||!out)return 0;
+  if(frames==0||frames>kMaximumCallbackFrames) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
   k->renderBegun.store(true,std::memory_order_release);
   const std::uint32_t pending=k->pendingPlan.load(std::memory_order_acquire);
   if(pending!=kNoPlan) {
@@ -128,7 +133,11 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   latticewake::KernelEvent event;
   while(count<events.size()&&k->events.tryPop(event)) events[count++]=event;
   const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);
-  return k->plans[active].kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count)) ? 1 : 0;
+  const bool rendered=k->plans[active].kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count));
+  if(!rendered) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
+  k->callbackCount.fetch_add(1,std::memory_order_relaxed);
+  k->renderedFrames.fetch_add(frames,std::memory_order_relaxed);
+  return 1;
 }
 int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
   if(!k||!status)return 0;
@@ -140,6 +149,12 @@ int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
   status->pending_plan_generation=pending==kNoPlan?0:k->plans[pending].generation.load(std::memory_order_acquire);
   return 1;
 }
+int lw_kernel_callback_status(const LWKernelRef* k,LWCallbackStatus* status) {
+  if(!k||!status)return 0;
+  *status={k->callbackCount.load(std::memory_order_relaxed),k->renderedFrames.load(std::memory_order_relaxed),k->renderFailures.load(std::memory_order_relaxed),kMaximumCallbackFrames};
+  return 1;
+}
+unsigned int lw_kernel_maximum_callback_frames(void) { return kMaximumCallbackFrames; }
 unsigned int lw_kernel_event_queue_capacity(void) { return latticewake::RealtimeEventQueue::kUsableCapacity; }
 void lw_kernel_reset(LWKernelRef* k) { if(k){const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);k->plans[active].kernel.reset();k->events.resetProducerSide();} }
 LWMpeStateRef* lw_mpe_state_create(const unsigned int mode,const int masterChannel,const int memberCount) {

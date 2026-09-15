@@ -34,3 +34,23 @@ AVAudioEngine path.
 Offline components—including the terrain renderer, parser, proposal preview,
 oversampling harness, and role generator—remain outside this gate until they
 are redesigned and evidenced for callback use.
+
+## Cycle 024 preflight evidence
+
+The Swift `AVAudioSourceNode` closure now delegates directly to the bounded
+`lw_kernel_render` entry point. Its route copies the already-rendered mono
+buffer into any additional output buffers with C memory operations; it does not
+parse scenes, request UI state, create role events, take an application lock,
+or touch storage. The bridge counts successful blocks, frames, and rejected
+oversized buffers through atomics. Blocks above its explicit 4,096-frame cap
+are zeroed by the adapter rather than rendered with an unbounded span.
+
+The bridge fixture preallocates its kernel and buffers, then exercises 400
+callback renders at each of 44.1, 48, and 96 kHz over 32–1,024-frame blocks,
+with note-queue traffic; it observes zero C++ `new` calls during those renders.
+The same fixture verifies the oversized-block rejection and counters.
+
+This is a source-level and bridge-level preflight, not admission. It does not
+instrument Core Audio's internals, prove the Swift runtime performs no hidden
+work, measure actual device deadlines, or replace the required target-device
+performance and human listening session.

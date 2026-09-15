@@ -169,9 +169,19 @@ heard, approved, or preferred.
 - Non-goals: routing role notes into the audio callback, live sequencing,
   callback admission, hardware sessions, listening, or creative selection.
 
+### Cycle 024 — callback-route preflight instrumentation
+
+- Scope: bounded callback render counters, an explicit maximum block size,
+  safe silence on rejected blocks, and preallocated C++ bridge-route stress.
+- Evidence: allocation-probed 44.1/48/96 kHz stress at 32–1,024-frame blocks,
+  queue traffic, counter checks, oversized-block behavior, normal, sanitizer,
+  and Swift package checks; see `handoffs/cycle-024.md`.
+- Non-goals: Core Audio internal lock/allocation proof, device deadline data,
+  target-Mac performance, hardware MIDI, human listening, or callback admission.
+
 ## Next-cycle options
 
-### Cycle 024 — exact callback-path admission instrumentation
+### Cycle 025 — target-device callback evidence
 
-Measure allocation, locking, queue overload, and render-time behavior through
-the exact AVAudioEngine route before claiming callback admission.
+Run a deliberately recorded target-Mac buffer/deadline and listening session;
+admit the exact route only if its documented technical and human gates pass.

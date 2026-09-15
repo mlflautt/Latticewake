@@ -141,6 +141,42 @@ void testRolePreviewBoundary() {
   assert(lw_role_preview_scene_json(kCanonicalScene, 0, 0, 48000.0, &first) == 0);
 }
 
+void testCallbackRouteStressAndBounds() {
+  assert(lw_kernel_maximum_callback_frames() == 4096U);
+  std::array<float, 4096> output{};
+  constexpr std::array<unsigned int, 6> frameCounts{32U, 64U, 128U, 256U, 512U, 1024U};
+  constexpr std::array<double, 3> sampleRates{44100.0, 48000.0, 96000.0};
+  std::array<LWKernelRef*, sampleRates.size()> kernels{};
+  for (std::size_t index = 0; index < kernels.size(); ++index) {
+    kernels[index] = lw_kernel_create();
+    assert(kernels[index] != nullptr);
+    assert(lw_kernel_prepare_demo(kernels[index], sampleRates[index]) == 1);
+  }
+  allocations.store(0, std::memory_order_relaxed);
+  countAllocations.store(true, std::memory_order_relaxed);
+  for (LWKernelRef* const kernel : kernels) {
+    unsigned long long expectedFrames = 0;
+    for (unsigned int iteration = 0; iteration < 400U; ++iteration) {
+      assert(lw_kernel_note_on(kernel, 60 + static_cast<int>(iteration % 8U), 0.6F) == 1);
+      const unsigned int frames = frameCounts[iteration % frameCounts.size()];
+      assert(lw_kernel_render(kernel, output.data(), frames) == 1);
+      expectedFrames += frames;
+    }
+    LWCallbackStatus status{};
+    assert(lw_kernel_callback_status(kernel, &status) == 1);
+    assert(status.callback_count == 400U);
+    assert(status.rendered_frames == expectedFrames);
+    assert(status.render_failures == 0U);
+    assert(status.maximum_callback_frames == output.size());
+    assert(lw_kernel_render(kernel, output.data(), status.maximum_callback_frames + 1U) == 0);
+    assert(lw_kernel_callback_status(kernel, &status) == 1);
+    assert(status.render_failures == 1U);
+  }
+  countAllocations.store(false, std::memory_order_relaxed);
+  assert(allocations.load(std::memory_order_relaxed) == 0U);
+  for (LWKernelRef* const kernel : kernels) { lw_kernel_destroy(kernel); }
+}
+
 }  // namespace
 
 void* operator new(const std::size_t size) {
@@ -168,5 +204,6 @@ int main() {
   testMpeBridgeState();
   testRoleControlCanonicalBoundary();
   testRolePreviewBoundary();
+  testCallbackRouteStressAndBounds();
   return 0;
 }

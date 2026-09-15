@@ -1,4 +1,5 @@
 import AVFoundation
+import Darwin
 
 @_silgen_name("lw_kernel_create") private func lw_kernel_create() -> OpaquePointer?
 @_silgen_name("lw_kernel_destroy") private func lw_kernel_destroy(_ kernel: OpaquePointer)
@@ -11,8 +12,47 @@ import AVFoundation
 @_silgen_name("lw_kernel_note_off") private func lw_kernel_note_off(_ kernel: OpaquePointer, _ note: Int32) -> Int32
 @_silgen_name("lw_kernel_render") private func lw_kernel_render(_ kernel: OpaquePointer, _ output: UnsafeMutablePointer<Float>, _ frames: UInt32) -> Int32
 
+private struct BridgeCallbackStatus {
+  var callbackCount: UInt64 = 0
+  var renderedFrames: UInt64 = 0
+  var renderFailures: UInt64 = 0
+  var maximumCallbackFrames: UInt32 = 0
+}
+
+@_silgen_name("lw_kernel_callback_status") private func lw_kernel_callback_status(
+  _ kernel: OpaquePointer, _ status: UnsafeMutablePointer<BridgeCallbackStatus>
+) -> Int32
+
+private enum CallbackRenderRoute {
+  static func render(kernel: OpaquePointer, frameCount: AVAudioFrameCount,
+                     audioBufferList: UnsafeMutablePointer<AudioBufferList>) -> OSStatus {
+    let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
+    guard let firstBuffer = buffers.first, let firstData = firstBuffer.mData else { return noErr }
+    let first = firstData.assumingMemoryBound(to: Float.self)
+    let rendered = lw_kernel_render(kernel, first, frameCount)
+    var index = 1
+    while index < buffers.count {
+      let buffer = buffers[index]
+      if let destination = buffer.mData {
+        let bytes = min(Int(buffer.mDataByteSize), Int(frameCount) * MemoryLayout<Float>.stride)
+        memcpy(destination, firstData, bytes)
+      }
+      index += 1
+    }
+    if rendered == 0 {
+      var zeroIndex = 0
+      while zeroIndex < buffers.count {
+        if let destination = buffers[zeroIndex].mData { memset(destination, 0, Int(buffers[zeroIndex].mDataByteSize)) }
+        zeroIndex += 1
+      }
+    }
+    return noErr
+  }
+}
+
 @MainActor final class LatticewakeAudio: ObservableObject {
   @Published private(set) var running = false
+  @Published private(set) var callbackStatus = "No callback blocks rendered."
   private let engine = AVAudioEngine()
   private var kernel: OpaquePointer?
   private var sourceNode: AVAudioSourceNode?
@@ -36,14 +76,7 @@ import AVFoundation
     let prepared = sceneJSON.withCString { lw_kernel_prepare_scene_json(created, $0, format.sampleRate) }
     guard prepared != 0 else { lw_kernel_destroy(created); throw NSError(domain: "Latticewake", code: 2) }
     let node = AVAudioSourceNode { _, _, count, audioBufferList -> OSStatus in
-      let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
-      guard let first = buffers.first?.mData?.assumingMemoryBound(to: Float.self) else { return noErr }
-      _ = lw_kernel_render(created, first, count)
-      for buffer in buffers.dropFirst() {
-        guard let pointer = buffer.mData?.assumingMemoryBound(to: Float.self) else { continue }
-        for frame in 0..<Int(count) { pointer[frame] = first[frame] }
-      }
-      return noErr
+      CallbackRenderRoute.render(kernel: created, frameCount: count, audioBufferList: audioBufferList)
     }
     kernel = created
     sourceNode = node
@@ -60,6 +93,7 @@ import AVFoundation
       throw error
     }
     running = true
+    callbackStatus = "Callback preflight active (maximum 4096 frames)."
   }
   func stop() {
     engine.stop()
@@ -68,7 +102,13 @@ import AVFoundation
       engine.detach(sourceNode)
     }
     sourceNode = nil
-    if let kernel { lw_kernel_destroy(kernel) }
+    if let kernel {
+      var status = BridgeCallbackStatus()
+      if lw_kernel_callback_status(kernel, &status) != 0 {
+        callbackStatus = "Callback preflight: \(status.callbackCount) blocks, \(status.renderedFrames) frames, \(status.renderFailures) rejected."
+      }
+      lw_kernel_destroy(kernel)
+    }
     kernel = nil
     running = false
   }
