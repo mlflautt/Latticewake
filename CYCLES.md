@@ -160,9 +160,18 @@ heard, approved, or preferred.
 - Evidence: deterministic role-control bridge round trip and normal/sanitizer/Swift checks; see `handoffs/cycle-022.md`.
 - Non-goals: live role sequencing, callback UI reads, human audition, or creative selection.
 
-## Next-cycle options
-
 ### Cycle 023 — role-event preview and replay
 
-Expose deterministic offline role traces as preview-only material and surface
-their receipt/status without routing them into the audio callback yet.
+- Scope: an offline C ABI boundary for bounded four-role event generation, with
+  a deterministic trace receipt surfaced in Terrain Stage.
+- Evidence: repeated C++ and Swift fixtures compare the event count, range, and
+  trace receipt for the same canonical Scene bytes.
+- Non-goals: routing role notes into the audio callback, live sequencing,
+  callback admission, hardware sessions, listening, or creative selection.
+
+## Next-cycle options
+
+### Cycle 024 — exact callback-path admission instrumentation
+
+Measure allocation, locking, queue overload, and render-time behavior through
+the exact AVAudioEngine route before claiming callback admission.

@@ -128,6 +128,19 @@ void testRoleControlCanonicalBoundary() {
   lw_string_destroy(updated);
 }
 
+void testRolePreviewBoundary() {
+  LWRoleTraceSummary first{};
+  LWRoleTraceSummary repeated{};
+  assert(lw_role_preview_scene_json(kCanonicalScene, 0, 48000, 48000.0, &first) == 1);
+  assert(lw_role_preview_scene_json(kCanonicalScene, 0, 48000, 48000.0, &repeated) == 1);
+  assert(first.event_count > 0U);
+  assert(first.event_count == repeated.event_count);
+  assert(first.first_sample == repeated.first_sample);
+  assert(first.last_sample == repeated.last_sample);
+  assert(first.receipt == repeated.receipt);
+  assert(lw_role_preview_scene_json(kCanonicalScene, 0, 0, 48000.0, &first) == 0);
+}
+
 }  // namespace
 
 void* operator new(const std::size_t size) {
@@ -154,5 +167,6 @@ int main() {
   testTerrainFrameSnapshotBoundary();
   testMpeBridgeState();
   testRoleControlCanonicalBoundary();
+  testRolePreviewBoundary();
   return 0;
 }

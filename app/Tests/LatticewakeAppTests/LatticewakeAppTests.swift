@@ -24,3 +24,11 @@ import Foundation
   let (bytes, loaded) = try SceneStore.loadCanonical(from: url)
   #expect(bytes == Data("{}".utf8)); #expect(receipt == loaded)
 }
+
+@Test func roleTracePreviewIsDeterministic() throws {
+  let bytes = Data(DemoScene.canonicalJSON.utf8)
+  let first = try RoleTraceBridge.preview(sceneBytes: bytes)
+  let repeated = try RoleTraceBridge.preview(sceneBytes: bytes)
+  #expect(first == repeated)
+  #expect(first.eventCount > 0)
+}

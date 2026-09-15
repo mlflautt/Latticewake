@@ -48,6 +48,11 @@ The Stage also exposes four draft role controls. Applying them is explicit: it
 writes validated canonical Scene bytes, then refreshes the prepared scene and
 terrain snapshot; it does not yet schedule role notes in the audio callback.
 
+Applying or restoring a scene also generates one bounded, offline role-event
+preview window and displays its deterministic trace receipt. This is traceable
+material for review and replay—not a live sequencer or a statement about the
+audible result.
+
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see

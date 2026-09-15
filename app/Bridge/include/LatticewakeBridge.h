@@ -25,6 +25,12 @@ typedef struct LWRoleControl {
   unsigned long long seed_offset;
   unsigned int pattern;
 } LWRoleControl;
+typedef struct LWRoleTraceSummary {
+  unsigned long long event_count;
+  unsigned long long first_sample;
+  unsigned long long last_sample;
+  unsigned long long receipt;
+} LWRoleTraceSummary;
 LWKernelRef* lw_kernel_create(void);
 void lw_kernel_destroy(LWKernelRef* kernel);
 int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
@@ -38,6 +44,9 @@ int lw_terrain_frame_scene_json(const char* json, unsigned long long sample_offs
 int lw_scene_role_control(const char* json, unsigned int role_index, LWRoleControl* control);
 int lw_scene_apply_role_control(const char* json, unsigned int role_index,
                                 const LWRoleControl* control, char** canonical_json);
+int lw_role_preview_scene_json(const char* json, unsigned long long start_sample,
+                               unsigned long long frames, double sample_rate,
+                               LWRoleTraceSummary* summary);
 void lw_string_destroy(char* value);
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);
 int lw_kernel_note_off(LWKernelRef* kernel, int note);

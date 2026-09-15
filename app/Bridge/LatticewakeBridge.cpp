@@ -6,9 +6,13 @@
 #include <cstring>
 #include <new>
 #include <span>
+#include <string_view>
 #include "../../../src/scene.cpp"
 #include "../../../src/terrain_evaluator.cpp"
 #include "../../../src/scene_serialization.cpp"
+#include "../../../src/event_trace.cpp"
+#include "../../../src/sample_transport.cpp"
+#include "../../../src/role_event_generator.cpp"
 #include "../../../src/realtime_kernel.cpp"
 #include "../../../src/realtime_event_queue.hpp"
 #include "../../../src/terrain_frame.cpp"
@@ -16,6 +20,14 @@
 
 namespace {
 constexpr std::uint32_t kNoPlan = 2;
+std::uint64_t fnv1a64(const std::string_view bytes) {
+  std::uint64_t value = 14695981039346656037ULL;
+  for (const unsigned char byte : bytes) {
+    value ^= byte;
+    value *= 1099511628211ULL;
+  }
+  return value;
+}
 struct RenderPlanSlot {
   latticewake::RealtimeKernel kernel;
   std::atomic<std::uint64_t> generation{0};
@@ -85,6 +97,19 @@ int lw_terrain_frame_scene_json(const char* json,const unsigned long long sample
 }
 int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,0};return 1; }
 int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,const LWRoleControl* control,char** canonicalJson) { if(!json||!control||!canonicalJson||control->pattern>3U)return 0;latticewake::SceneSerializationError error;auto scene=latticewake::parseSceneV0(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;auto& role=scene->roles[roleIndex];role.enabled=control->enabled!=0;role.range=control->range;role.density=control->density;role.seedOffset=control->seed_offset;switch(control->pattern){case 0:role.pattern={0};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 1:role.pattern={0,2,4};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 2:role.pattern={4,2,0};role.rhythm={{latticewake::RhythmStepKind::note}};break;default:role.pattern={0,1,2,1};role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}};break;}const auto serialized=latticewake::serializeSceneV0(*scene,error);if(!serialized)return 0;char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1; }
+int lw_role_preview_scene_json(const char* json,const unsigned long long startSample,const unsigned long long frames,const double sampleRate,LWRoleTraceSummary* summary) {
+  if(!json||!summary||frames==0)return 0;
+  latticewake::SceneSerializationError parseError;
+  const auto scene=latticewake::parseSceneV0(json,parseError);
+  if(!scene)return 0;
+  latticewake::RoleEventGenerationError generationError;
+  const auto trace=latticewake::generateRoleEvents(*scene,startSample,frames,{sampleRate,scene->harmonicContext.tempoBPM},generationError);
+  if(!trace)return 0;
+  const auto& events=trace->events();
+  const std::string bytes=trace->canonicalBytes();
+  *summary={static_cast<unsigned long long>(events.size()),events.empty()?0ULL:events.front().sampleOffset,events.empty()?0ULL:events.back().sampleOffset,fnv1a64(bytes)};
+  return 1;
+}
 void lw_string_destroy(char* value) { std::free(value); }
 int lw_kernel_note_on(LWKernelRef* k,int n,float v) { return k&&k->events.tryPush({0,true,n,v}) ? 1 : 0; }
 int lw_kernel_note_off(LWKernelRef* k,int n) { return k&&k->events.tryPush({0,false,n,0}) ? 1 : 0; }

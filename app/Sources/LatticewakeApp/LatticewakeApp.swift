@@ -14,6 +14,7 @@ struct ContentView: View {
   @State private var sceneBytes = Data()
   @State private var sceneURL: URL?
   @State private var roles: [RoleControl] = []
+  @State private var roleTrace = RoleTraceSummary.empty
   var body: some View {
     VStack(spacing: 14) {
       Text("Latticewake").font(.largeTitle)
@@ -34,6 +35,9 @@ struct ContentView: View {
                            slide: min(1, max(0, value.location.y / 280)))
         })
       if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
+      if roleTrace.eventCount > 0 {
+        Text("Role preview: \(roleTrace.eventCount) events • trace \(roleTrace.receiptText)").font(.caption).foregroundStyle(.secondary)
+      }
       Text("256 immutable trace points • sample \(terrain.snapshot.sampleOffset)").font(.caption).foregroundStyle(.secondary)
       Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
       HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { midi.panic() } }
@@ -56,6 +60,7 @@ struct ContentView: View {
         try audio.setScene(bytes: bytes)
         try terrain.prepare(sceneBytes: bytes)
         roles = try RoleSceneBridge.controls(from: bytes)
+        roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
         sceneBytes = bytes
         sceneURL = url
         receipt = String(loaded.sha256.prefix(12))
@@ -74,6 +79,7 @@ struct ContentView: View {
       let updated = try RoleSceneBridge.apply(roles, to: sceneBytes)
       try audio.setScene(bytes: updated)
       try terrain.prepare(sceneBytes: updated)
+      roleTrace = try RoleTraceBridge.preview(sceneBytes: updated)
       if let sceneURL { receipt = String(try SceneStore.saveCanonical(updated, to: sceneURL).sha256.prefix(12)) }
       sceneBytes = updated
       error = ""
