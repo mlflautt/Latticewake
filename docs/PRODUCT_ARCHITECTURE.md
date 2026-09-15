@@ -8,8 +8,10 @@ third-party plug-ins.
 ## Artist-facing workspaces
 
 **Terrain Stage** is the default: an authoritative 2D terrain surface, direct
-play, role strip, engine macros, and runtime status. The Stage stays immediate
-even as the instrument gains depth.
+play, role strip, engine macros, and runtime status. The first implementation
+is a SwiftUI Canvas trace sourced from immutable C++ terrain-frame snapshots;
+an optional Metal field renderer and 3D view remain later adapters. The Stage
+stays immediate even as the instrument gains depth.
 
 **Scene**, **Generator**, and **Library** are progressive workspaces over the
 same canonical scene model. Scene edits terrain, harmony, roles, paths, and

@@ -3,6 +3,7 @@
 #include <array>
 #include <atomic>
 #include <cassert>
+#include <cmath>
 #include <cstdlib>
 #include <new>
 
@@ -10,6 +11,8 @@ namespace {
 
 std::atomic<bool> countAllocations{false};
 std::atomic<unsigned long long> allocations{0};
+
+constexpr const char* kCanonicalScene = R"({"schemaVersion":"latticewake-scene-v0","sceneID":"bridge-frame","seed":"1","title":"Bridge Frame","createdFrom":null,"harmonicContext":{"tonic":"c","mode":"dorian","scaleDegrees":[0,2,3,5,7,9,10],"chordDegree":0,"chordQuality":"minor","inversion":0,"octaveReference":4,"tempoBPM":120,"tuningID":null},"terrain":{"kind":"mandelbrot","detail":0.5,"zoom":0.5,"offsetX":0.5,"offsetY":0.5,"rotation":0,"motion":0,"maxIterations":128,"normalization":1},"path":{"kind":"ellipse","rateRatio":0.5,"radiusX":0.5,"radiusY":0.5,"angle":0,"translationX":0.5,"translationY":0.5,"meander":0,"feedback":0,"spatialLimit":1},"roles":[{"id":"drone","enabled":true,"range":0.5,"density":0.5,"pattern":[0],"rhythm":["note"],"variation":0,"seedOffset":"0","voiceRoute":"internal","midiRoute":""},{"id":"pad","enabled":true,"range":0.5,"density":0.5,"pattern":[0],"rhythm":["note"],"variation":0,"seedOffset":"1","voiceRoute":"internal","midiRoute":""},{"id":"motifA","enabled":true,"range":0.5,"density":0.5,"pattern":[0],"rhythm":["note"],"variation":0,"seedOffset":"2","voiceRoute":"internal","midiRoute":""},{"id":"motifB","enabled":true,"range":0.5,"density":0.5,"pattern":[0],"rhythm":["note"],"variation":0,"seedOffset":"3","voiceRoute":"internal","midiRoute":""}]})";
 
 void testBoundedQueueAndRender() {
   LWKernelRef* const kernel = lw_kernel_create();
@@ -75,6 +78,27 @@ void testQueueResetAndInvalidStatus() {
   lw_kernel_destroy(kernel);
 }
 
+void testTerrainFrameSnapshotBoundary() {
+  std::array<LWTerrainFramePoint, 32> first{};
+  std::array<LWTerrainFramePoint, 32> repeated{};
+  unsigned int firstCount = 0;
+  unsigned int repeatedCount = 0;
+  assert(lw_terrain_frame_scene_json(kCanonicalScene, 480, 0.0, 1.0 / 31.0,
+                                     first.data(), static_cast<unsigned int>(first.size()), &firstCount) == 1);
+  assert(lw_terrain_frame_scene_json(kCanonicalScene, 480, 0.0, 1.0 / 31.0,
+                                     repeated.data(), static_cast<unsigned int>(repeated.size()), &repeatedCount) == 1);
+  assert(firstCount == first.size() && firstCount == repeatedCount);
+  for (unsigned int index = 0; index < firstCount; ++index) {
+    assert(std::isfinite(first[index].value));
+    assert(first[index].value >= 0.0F && first[index].value <= 1.0F);
+    assert(first[index].value == repeated[index].value);
+    assert(first[index].path_x == repeated[index].path_x);
+    assert(first[index].path_y == repeated[index].path_y);
+  }
+  assert(lw_terrain_frame_scene_json(kCanonicalScene, 0, 0.0, 0.0,
+                                     first.data(), 0, &firstCount) == 0);
+}
+
 }  // namespace
 
 void* operator new(const std::size_t size) {
@@ -98,5 +122,6 @@ void operator delete[](void* const pointer) noexcept { ::operator delete(pointer
 int main() {
   testBoundedQueueAndRender();
   testQueueResetAndInvalidStatus();
+  testTerrainFrameSnapshotBoundary();
   return 0;
 }

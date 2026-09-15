@@ -34,6 +34,10 @@ slots, and bridge-level render allocation tests. It is still not admitted to a d
 [real-time admission gate](docs/REALTIME_ADMISSION.md). No target-device
 performance or human listening result is claimed.
 
+The native Terrain Stage now renders a 256-point immutable C++ terrain trace in
+a SwiftUI 2D Canvas. It is an initial scene visualization, not a Metal field,
+3D view, live transport display, or creative evaluation.
+
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see

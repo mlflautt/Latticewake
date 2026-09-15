@@ -126,12 +126,16 @@ heard, approved, or preferred.
 - Non-goals: complete callback admission, multi-producer ingestion, Core MIDI,
   Terrain Stage UI, EngineRack, or human listening evidence.
 
-## Next-cycle options
-
 ### Cycle 019 — Terrain Stage snapshots
 
-Publish immutable terrain-frame snapshots to a SwiftUI/Metal 2D surface without
-callback reads of UI state.
+- Scope: bounded C terrain-frame copy boundary and an immutable SwiftUI Canvas
+  Stage trace derived from canonical Scene bytes.
+- Evidence: deterministic/capacity core bridge fixtures plus a Swift snapshot
+  preparation test; see `handoffs/cycle-019.md`.
+- Non-goals: Metal or 3D rendering, live transport display, callback admission,
+  MIDI, role controls, or human visual/auditory review.
+
+## Next-cycle options
 
 ### Cycle 020 — Core MIDI and MPE input
 

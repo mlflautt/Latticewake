@@ -9,6 +9,7 @@
 #include "../../../src/scene_serialization.cpp"
 #include "../../../src/realtime_kernel.cpp"
 #include "../../../src/realtime_event_queue.hpp"
+#include "../../../src/terrain_frame.cpp"
 
 namespace {
 constexpr std::uint32_t kNoPlan = 2;
@@ -59,6 +60,21 @@ int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return prepareInit
 int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);return scene?prepareInitial(kernel,*scene,rate):0; }
 int lw_kernel_publish_demo(LWKernelRef* kernel,double rate) { return publishPlan(kernel,demoScene(),rate); }
 int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneV0(json,error);return scene?publishPlan(kernel,*scene,rate):0; }
+int lw_terrain_frame_scene_json(const char* json,const unsigned long long sampleOffset,const double startPhase,const double phaseStep,LWTerrainFramePoint* points,const unsigned int capacity,unsigned int* pointCount) {
+  if(!json||!points||!pointCount||capacity==0)return 0;
+  latticewake::SceneSerializationError parseError;
+  const auto scene=latticewake::parseSceneV0(json,parseError);
+  if(!scene)return 0;
+  latticewake::TerrainFrameError frameError;
+  const auto frame=latticewake::buildTerrainFrame(*scene,{sampleOffset,startPhase,phaseStep,capacity},frameError);
+  if(!frame||frame->points.size()>capacity)return 0;
+  for(std::size_t index=0;index<frame->points.size();++index) {
+    const auto& point=frame->points[index];
+    points[index]={static_cast<float>(point.value),static_cast<float>(point.pathX),static_cast<float>(point.pathY),point.iterations,point.escaped?1U:0U};
+  }
+  *pointCount=static_cast<unsigned int>(frame->points.size());
+  return 1;
+}
 int lw_kernel_note_on(LWKernelRef* k,int n,float v) { return k&&k->events.tryPush({0,true,n,v}) ? 1 : 0; }
 int lw_kernel_note_off(LWKernelRef* k,int n) { return k&&k->events.tryPush({0,false,n,0}) ? 1 : 0; }
 int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { return k&&k->events.tryPush({0,false,0,0,glide,press,slide,true}) ? 1 : 0; }
