@@ -94,6 +94,51 @@ import LatticewakeBridge
   #expect(bytes == Data("{}".utf8)); #expect(receipt == loaded)
 }
 
+@Test func sceneLibraryPreservesLegacyV0AndRoundTripsV1() throws {
+  let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+  try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let legacyURL = directory.appendingPathComponent("legacy.json")
+  let legacyBytes = Data(DemoScene.gestureJSON.utf8)
+  _ = try SceneStore.saveCanonical(legacyBytes, to: legacyURL)
+  let legacy = try SceneLibrary.load(from: legacyURL)
+  #expect(legacy.originalSceneV0)
+  #expect(legacy.sceneBytes == legacyBytes)
+
+  let libraryURL = directory.appendingPathComponent("scene.latticewake.json")
+  let settings = PerformanceSettingsV1(gestureGlideSemitones: 7, pointerNote: 50, roleTransportEnabled: true)
+  let document = SceneLibraryDocumentV1(sceneJSON: DemoScene.fourRoleJSON, performance: settings)
+  let saved = try SceneLibrary.save(document, to: libraryURL)
+  let loaded = try SceneLibrary.load(from: libraryURL)
+  #expect(!loaded.originalSceneV0)
+  #expect(loaded.sceneBytes == Data(DemoScene.fourRoleJSON.utf8))
+  #expect(loaded.performance == settings)
+  #expect(saved.sha256 == loaded.receipt.sha256)
+}
+
+@Test func sceneUndoIsBoundedAndRestoresPrecedingBytes() {
+  var history = SceneUndoHistory()
+  let first = Data("first".utf8), second = Data("second".utf8)
+  history.record(first); history.record(first); history.record(second)
+  #expect(history.undo() == second)
+  #expect(history.undo() == first)
+  #expect(history.undo() == nil)
+}
+
+@Test func offlineCaptureWritesBoundSceneReceipt() throws {
+  let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+  defer { try? FileManager.default.removeItem(at: directory) }
+  let bytes = Data(DemoScene.fourRoleJSON.utf8)
+  let (url, receipt) = try OfflineCapture.render(sceneBytes: bytes, to: directory)
+  let wav = try Data(contentsOf: url)
+  let receiptData = try Data(contentsOf: url.appendingPathExtension("receipt.json"))
+  let savedReceipt = try JSONDecoder().decode(CaptureReceiptV1.self, from: receiptData)
+  #expect(wav.prefix(4) == Data("RIFF".utf8))
+  #expect(receipt.sceneSHA256 == SceneLibrary.receipt(for: bytes).sha256)
+  #expect(receipt.frameCount == 384_000 && receipt.roleTransport)
+  #expect(savedReceipt == receipt)
+}
+
 @Test func roleTracePreviewIsDeterministic() throws {
   let bytes = Data(DemoScene.canonicalJSON.utf8)
   let first = try RoleTraceBridge.preview(sceneBytes: bytes)

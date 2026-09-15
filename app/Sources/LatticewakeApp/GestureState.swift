@@ -2,12 +2,13 @@ struct GestureState {
   private(set) var targets: [Int] = []
   private(set) var pointerNote: Int?
   private(set) var active = false
-  mutating func begin(held: Set<Int>) -> Int? {
+  mutating func begin(held: Set<Int>, pointerNote: Int = 48) -> Int? {
     guard !active else { return nil }
     active = true
     // Pointer C3 is outside the displayed keyboard's C4–C5 range.
-    pointerNote = held.isEmpty ? 48 : nil
-    targets = held.isEmpty ? [48] : held.sorted()
+    let normalizedPointer = min(127, max(0, pointerNote))
+    self.pointerNote = held.isEmpty ? normalizedPointer : nil
+    targets = held.isEmpty ? [normalizedPointer] : held.sorted()
     return pointerNote
   }
   mutating func end() -> (note: Int?, targets: [Int]) {

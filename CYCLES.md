@@ -229,7 +229,9 @@ input verification remains open; this is not a completed cycle.
 030: implemented role transport, source-aware identities, and deterministic
 sequencing; see handoffs/cycle-030.md. Target-device and listening evidence are
 still separate from the technical fixtures.
-031: versioned scene library, undo, captures, and three starter scenes.
+031: versioned scene library, undo, captures, and three starter scenes;
+implemented in `handoffs/cycle-031.md`. Full-Xcode Swift fixture evidence is
+pending local Xcode licence acceptance.
 
 Each target stays open until its stated functional tests pass. Device and human
 observations remain separate evidence.

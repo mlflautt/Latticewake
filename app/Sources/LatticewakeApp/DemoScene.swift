@@ -1,6 +1,19 @@
 import Foundation
 
 enum DemoScene {
+  static var sustainedJSON: String {
+    playableJSON.replacingOccurrences(of: "playable-starter", with: "sustained-terrain")
+      .replacingOccurrences(of: "Playable Terrain", with: "Sustained Terrain")
+      .replacingOccurrences(of: "\"enabled\":true", with: "\"enabled\":false")
+  }
+  static var gestureJSON: String {
+    sustainedJSON.replacingOccurrences(of: "sustained-terrain", with: "gesture-terrain")
+      .replacingOccurrences(of: "Sustained Terrain", with: "Gesture Terrain")
+  }
+  static var fourRoleJSON: String {
+    playableJSON.replacingOccurrences(of: "playable-starter", with: "four-role-loop")
+      .replacingOccurrences(of: "Playable Terrain", with: "Four Role Loop")
+  }
   // An explicit alternative: never rewrite an existing user's saved scene.
   static var playableJSON: String {
     canonicalJSON.replacingOccurrences(of: "\"zoom\":0.5", with: "\"zoom\":0")

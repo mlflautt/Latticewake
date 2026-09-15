@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import LatticewakeBridge
+import UniformTypeIdentifiers
 
 @main struct LatticewakeApp: App {
   var body: some Scene { WindowGroup { ContentView() } }
@@ -19,21 +20,26 @@ struct ContentView: View {
   @State private var keyboard = KeyboardState()
   @State private var gesture = GestureState()
   @State private var pointer: CGPoint?
+  @State private var performance = PerformanceSettingsV1()
+  @State private var undoHistory = SceneUndoHistory()
+  @State private var isDirty = false
   var body: some View {
     VStack(spacing: 14) {
       Text("Latticewake").font(.largeTitle)
-      Button("Try Playable Starter (unsaved)") {
-        do {
-          let bytes = Data(DemoScene.playableJSON.utf8)
-          try audio.setScene(bytes: bytes)
-          try terrain.prepare(sceneBytes: bytes)
-          roles = try RoleSceneBridge.controls(from: bytes)
-          roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
-          sceneBytes = bytes
-          sceneURL = nil
-          receipt = "Playable starter — unsaved"
-        } catch { self.error = error.localizedDescription }
+      HStack {
+        Menu("Starter Scenes") {
+          Button("Sustained Terrain") { selectStarter(DemoScene.sustainedJSON, label: "Sustained Terrain") }
+          Button("Gesture Terrain") { selectStarter(DemoScene.gestureJSON, label: "Gesture Terrain") }
+          Button("Four Role Loop") { selectStarter(DemoScene.fourRoleJSON, label: "Four Role Loop") }
+        }
+        Button("New") { selectStarter(DemoScene.gestureJSON, label: "New Gesture Terrain") }
+        Button("Save As…") { saveAs() }
+        Button("Load…") { load() }
+        Button("Undo") { undo() }.disabled(!undoHistory.canUndo)
+        Button("Capture 8s WAV") { capture() }
       }
+      Text(sceneURL == nil ? "Unsaved scene\(isDirty ? " • changed" : "")" : "\(sceneURL!.lastPathComponent)\(isDirty ? " • unsaved changes" : "")")
+        .font(.caption).foregroundStyle(.secondary)
       if !terrain.snapshot.points.isEmpty,
          (terrain.snapshot.points.map(\.value).max() ?? 0) - (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001 {
         Text("This path produces no sustained tone.").foregroundStyle(.orange)
@@ -60,7 +66,7 @@ struct ContentView: View {
           .contentShape(Rectangle())
           .gesture(DragGesture(minimumDistance: 0).onChanged { value in
             guard audio.running else { return }
-            if let note = gesture.begin(held: keyboard.held) { audio.pointerPlay(note: note) }
+            if let note = gesture.begin(held: keyboard.held, pointerNote: performance.pointerNote) { audio.pointerPlay(note: note) }
             let x = GestureState.normalized(value.location.x, length: geometry.size.width)
             let y = GestureState.normalized(value.location.y, length: geometry.size.height)
             pointer = CGPoint(x: x*geometry.size.width,y: y*geometry.size.height)
@@ -84,7 +90,9 @@ struct ContentView: View {
         Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }
         Button(audio.rolesRunning ? "Stop Roles" : "Play Roles") {
           if !audio.running { do { try audio.start() } catch { self.error = error.localizedDescription; return } }
-          if audio.rolesRunning { audio.stopRoles() } else { audio.startRoles() }
+          if audio.rolesRunning { audio.stopRoles(); performance.roleTransportEnabled = false }
+          else { audio.startRoles(); performance.roleTransportEnabled = true }
+          isDirty = true
         }
         Button("Panic") { midi.panic() }
       }
@@ -99,18 +107,7 @@ struct ContentView: View {
       if !error.isEmpty { Text(error).foregroundStyle(.red) }
     }.frame(minWidth: 520, minHeight: 520).padding().focusable().task {
       do {
-        let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Latticewake", isDirectory: true)
-        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let url = directory.appendingPathComponent("scene-v0.json")
-        if !FileManager.default.fileExists(atPath: url.path) { _ = try SceneStore.saveCanonical(Data(DemoScene.playableJSON.utf8), to: url) }
-        let (bytes, loaded) = try SceneStore.loadCanonical(from: url)
-        try audio.setScene(bytes: bytes)
-        try terrain.prepare(sceneBytes: bytes)
-        roles = try RoleSceneBridge.controls(from: bytes)
-        roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
-        sceneBytes = bytes
-        sceneURL = url
-        receipt = String(loaded.sha256.prefix(12))
+        try installScene(Data(DemoScene.gestureJSON.utf8), url: nil, recordUndo: false, dirty: false)
       } catch { self.error = error.localizedDescription }
       midi.start(audio: audio)
     }.onKeyPress(phases: [.down, .up, .repeat]) { press in
@@ -141,12 +138,70 @@ struct ContentView: View {
   private func applyRoleChanges() {
     do {
       let updated = try RoleSceneBridge.apply(roles, to: sceneBytes)
-      try audio.setScene(bytes: updated)
-      try terrain.prepare(sceneBytes: updated)
-      roleTrace = try RoleTraceBridge.preview(sceneBytes: updated)
-      if let sceneURL { receipt = String(try SceneStore.saveCanonical(updated, to: sceneURL).sha256.prefix(12)) }
-      sceneBytes = updated
+      try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
       error = ""
+    } catch { self.error = error.localizedDescription }
+  }
+
+  private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool) throws {
+    if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes) }
+    try audio.setScene(bytes: bytes)
+    try terrain.prepare(sceneBytes: bytes)
+    roles = try RoleSceneBridge.controls(from: bytes)
+    roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
+    sceneBytes = bytes
+    sceneURL = url
+    receipt = String(SceneLibrary.receipt(for: bytes).sha256.prefix(12))
+    isDirty = dirty
+    error = ""
+  }
+
+  private func selectStarter(_ json: String, label: String) {
+    do {
+      performance = .init()
+      try installScene(Data(json.utf8), url: nil, recordUndo: true, dirty: false)
+      receipt = "\(label) — unsaved"
+    } catch { self.error = error.localizedDescription }
+  }
+
+  private func saveAs() {
+    let panel = NSSavePanel()
+    panel.allowedContentTypes = [.json]
+    panel.nameFieldStringValue = "Latticewake Scene.latticewake.json"
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    do {
+      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: sceneBytes, as: UTF8.self), performance: performance)
+      let saved = try SceneLibrary.save(document, to: url)
+      sceneURL = url; isDirty = false; receipt = "Saved \(String(saved.sha256.prefix(12)))"
+    } catch { self.error = error.localizedDescription }
+  }
+
+  private func load() {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = [.json]
+    panel.allowsMultipleSelection = false
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    do {
+      let loaded = try SceneLibrary.load(from: url)
+      performance = loaded.performance
+      try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false)
+      receipt = "Loaded \(loaded.originalSceneV0 ? "Scene v0" : "Library v1") \(String(loaded.receipt.sha256.prefix(12)))"
+    } catch { self.error = error.localizedDescription }
+  }
+
+  private func undo() {
+    guard let previous = undoHistory.undo() else { return }
+    do { try installScene(previous, url: sceneURL, recordUndo: false, dirty: true) }
+    catch { self.error = error.localizedDescription }
+  }
+
+  private func capture() {
+    do {
+      let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
+                                             appropriateFor: nil, create: true)
+        .appendingPathComponent("Latticewake/Captures", isDirectory: true)
+      let (url, captureReceipt) = try OfflineCapture.render(sceneBytes: sceneBytes, to: root)
+      receipt = "Capture \(url.lastPathComponent) • \(captureReceipt.frameCount) frames"
     } catch { self.error = error.localizedDescription }
   }
 }
