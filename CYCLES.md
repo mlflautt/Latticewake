@@ -235,3 +235,23 @@ pending local Xcode licence acceptance.
 
 Each target stays open until its stated functional tests pass. Device and human
 observations remain separate evidence.
+
+### Cycle 032 — baseline consolidation and architecture record
+
+- Scope: consolidate the Cycle 031 app baseline, rebuild and smoke-test the
+  exact target app, record the North Star v2 architecture, and define the
+  luminous-cartography interface language.
+- Evidence: normal and ASan/UBSan C++ suites pass; the signed app starts the
+  device route, runs four active lanes, writes a deterministic eight-second
+  capture, and stops with zero bridge budget misses or rejected blocks. See
+  `handoffs/cycle-032.md` and `docs/REALTIME_ADMISSION.md`.
+- Retained gates: full Swift tests require acceptance of the installed Xcode
+  licence; Command Line Tools on this host provide neither `Testing` nor
+  `XCTest`. Native gesture feel, hardware MPE, human listening, and exact
+  callback lock/allocation admission also remain open.
+
+### Next implementation target — Cycle 033
+
+Introduce Scene v1 and one portable `RenderPlanBuilder`, including deterministic
+canonicalization, in-memory Scene v0 migration, stable component identities,
+byte-preserved legacy files, and equivalent migrated render fixtures.

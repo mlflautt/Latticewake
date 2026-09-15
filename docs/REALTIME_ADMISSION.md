@@ -75,3 +75,18 @@ source-node closure inherited `@MainActor` isolation and Core Audio invoked it
 on an I/O thread. The callback now captures only an explicitly sendable opaque
 render-state holder and calls a `nonisolated` render helper. It must be
 recompiled and retested on the target route before any admission claim.
+
+## Cycle 032 target-device smoke evidence
+
+The exact rebuilt Cycle 032 app started its device route without reproducing
+the isolation crash. The Four Role Loop starter reported four active lanes,
+produced a nonzero output meter, completed an eight-second 48 kHz capture, and
+stopped with this app-owned bridge receipt: 7,248 blocks, 3,409,460 frames,
+maximum render duration 832 microseconds, zero bridge budget misses, and zero
+rejected blocks. The capture receipt binds 384,000 frames to canonical scene
+hash `eab26874b4d26c1333277074519511661d74d29b8f75fe815446deafa5fa842e`.
+
+This closes the replacement-start smoke check only. Native trackpad gesture
+feel, hardware MPE, human listening, and exact callback allocation/lock evidence
+remain open. Consequently the admission status at the top of this document is
+unchanged.

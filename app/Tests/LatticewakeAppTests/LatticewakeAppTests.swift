@@ -1,37 +1,38 @@
-import Testing
+import XCTest
 import Foundation
 import AVFoundation
 import LatticewakeBridge
 @testable import LatticewakeApp
 
-@Test func keyboardRepeatAndFocusRelease() {
+final class LatticewakeAppTests: XCTestCase {
+  func testKeyboardRepeatAndFocusRelease() {
   var keys = KeyboardState()
   let first = keys.down(60)
   let repeated = keys.down(60)
   let second = keys.down(64)
   let released = keys.releaseAll()
   let stale = keys.up(60)
-  #expect(first && !repeated && second && !stale)
-  #expect(released == [60,64])
-  #expect(keys.held.isEmpty)
+  XCTAssertTrue(first && !repeated && second && !stale)
+  XCTAssertEqual(released, [60,64])
+  XCTAssertTrue(keys.held.isEmpty)
 }
 
-@Test func gestureOwnershipAndResize() {
+  func testGestureOwnershipAndResize() {
   var pointer = GestureState()
   let note = pointer.begin(held: [])
-  #expect(note == 48)
+  XCTAssertEqual(note, 48)
   let duplicate = pointer.begin(held: [60])
-  #expect(duplicate == nil)
-  #expect(pointer.targets == [48])
+  XCTAssertNil(duplicate)
+  XCTAssertEqual(pointer.targets, [48])
   let release = pointer.end()
-  #expect(release.note == 48 && !pointer.active)
+  XCTAssertTrue(release.note == 48 && !pointer.active)
   let shaping = pointer.begin(held: [60,64])
-  #expect(shaping == nil && pointer.targets == [60,64])
-  #expect(GestureState.normalized(100,length: 200) == GestureState.normalized(300,length: 600))
-  #expect(GestureState.normalized(-20,length: 200) == 0)
+  XCTAssertTrue(shaping == nil && pointer.targets == [60,64])
+  XCTAssertEqual(GestureState.normalized(100,length: 200), GestureState.normalized(300,length: 600))
+  XCTAssertEqual(GestureState.normalized(-20,length: 200), 0)
 }
 
-@Test func audioCallbackRunsOnBackgroundThread() async {
+  func testAudioCallbackRunsOnBackgroundThread() async {
   let success = await withCheckedContinuation { continuation in
     DispatchQueue.global().async {
       let kernel = lw_kernel_create()!
@@ -52,10 +53,10 @@ import LatticewakeBridge
       continuation.resume(returning: prepared == 1 && result == 0 && audible && stereo && !Thread.isMainThread)
     }
   }
-  #expect(success)
+  XCTAssertTrue(success)
 }
 
-@Test @MainActor func optInDeviceSmoke() async throws {
+  @MainActor func testOptInDeviceSmoke() async throws {
   guard ProcessInfo.processInfo.environment["LW_DEVICE_SMOKE"] == "1" else { return }
   let audio = LatticewakeAudio()
   try audio.setScene(bytes: Data(DemoScene.playableJSON.utf8))
@@ -66,35 +67,35 @@ import LatticewakeBridge
   audio.release(note: 60)
   try await Task.sleep(for: .milliseconds(200))
   audio.stop()
-  #expect((audio.auditionReceipt?.callbackCount ?? 0) > 0)
-  #expect(audio.auditionReceipt?.rejectedBlocks == 0)
+  XCTAssertGreaterThan(audio.auditionReceipt?.callbackCount ?? 0, 0)
+  XCTAssertEqual(audio.auditionReceipt?.rejectedBlocks, 0)
   print(audio.auditionReceipt?.machineLine ?? "missing receipt")
 }
-@Test @MainActor func terrainStagePreparesImmutableSnapshot() throws {
+  @MainActor func testTerrainStagePreparesImmutableSnapshot() throws {
   let model = TerrainStageModel()
   try model.prepare(sceneBytes: Data(DemoScene.canonicalJSON.utf8), sampleOffset: 480)
-  #expect(model.snapshot.sampleOffset == 480)
-  #expect(model.snapshot.points.count == 256)
-  #expect(model.snapshot.points.allSatisfy { $0.value >= 0 && $0.value <= 1 })
+  XCTAssertEqual(model.snapshot.sampleOffset, 480)
+  XCTAssertEqual(model.snapshot.points.count, 256)
+  XCTAssertTrue(model.snapshot.points.allSatisfy { $0.value >= 0 && $0.value <= 1 })
 }
-@Test func midiDecoderPreservesChannelVoiceMessages() {
+  func testMidiDecoderPreservesChannelVoiceMessages() {
   let messages = MIDIMessageDecoder.decode([0x91, 60, 100, 0xE1, 0, 64, 0xD1, 96, 0xB1, 74, 127])
-  #expect(messages == [
+  XCTAssertEqual(messages, [
     MIDIMessage(status: 0x91, data1: 60, data2: 100),
     MIDIMessage(status: 0xE1, data1: 0, data2: 64),
     MIDIMessage(status: 0xD1, data1: 96, data2: 0),
     MIDIMessage(status: 0xB1, data1: 74, data2: 127)
   ])
 }
-@Test func sceneStoreRoundTrips() throws {
+  func testSceneStoreRoundTrips() throws {
   let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
   defer { try? FileManager.default.removeItem(at: url) }
   let receipt = try SceneStore.saveCanonical(Data("{}".utf8), to: url)
   let (bytes, loaded) = try SceneStore.loadCanonical(from: url)
-  #expect(bytes == Data("{}".utf8)); #expect(receipt == loaded)
+  XCTAssertEqual(bytes, Data("{}".utf8)); XCTAssertEqual(receipt, loaded)
 }
 
-@Test func sceneLibraryPreservesLegacyV0AndRoundTripsV1() throws {
+  func testSceneLibraryPreservesLegacyV0AndRoundTripsV1() throws {
   let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
   try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
   defer { try? FileManager.default.removeItem(at: directory) }
@@ -102,30 +103,30 @@ import LatticewakeBridge
   let legacyBytes = Data(DemoScene.gestureJSON.utf8)
   _ = try SceneStore.saveCanonical(legacyBytes, to: legacyURL)
   let legacy = try SceneLibrary.load(from: legacyURL)
-  #expect(legacy.originalSceneV0)
-  #expect(legacy.sceneBytes == legacyBytes)
+  XCTAssertTrue(legacy.originalSceneV0)
+  XCTAssertEqual(legacy.sceneBytes, legacyBytes)
 
   let libraryURL = directory.appendingPathComponent("scene.latticewake.json")
   let settings = PerformanceSettingsV1(gestureGlideSemitones: 7, pointerNote: 50, roleTransportEnabled: true)
   let document = SceneLibraryDocumentV1(sceneJSON: DemoScene.fourRoleJSON, performance: settings)
   let saved = try SceneLibrary.save(document, to: libraryURL)
   let loaded = try SceneLibrary.load(from: libraryURL)
-  #expect(!loaded.originalSceneV0)
-  #expect(loaded.sceneBytes == Data(DemoScene.fourRoleJSON.utf8))
-  #expect(loaded.performance == settings)
-  #expect(saved.sha256 == loaded.receipt.sha256)
+  XCTAssertFalse(loaded.originalSceneV0)
+  XCTAssertEqual(loaded.sceneBytes, Data(DemoScene.fourRoleJSON.utf8))
+  XCTAssertEqual(loaded.performance, settings)
+  XCTAssertEqual(saved.sha256, loaded.receipt.sha256)
 }
 
-@Test func sceneUndoIsBoundedAndRestoresPrecedingBytes() {
+  func testSceneUndoIsBoundedAndRestoresPrecedingBytes() {
   var history = SceneUndoHistory()
   let first = Data("first".utf8), second = Data("second".utf8)
   history.record(first); history.record(first); history.record(second)
-  #expect(history.undo() == second)
-  #expect(history.undo() == first)
-  #expect(history.undo() == nil)
+  XCTAssertEqual(history.undo(), second)
+  XCTAssertEqual(history.undo(), first)
+  XCTAssertNil(history.undo())
 }
 
-@Test func offlineCaptureWritesBoundSceneReceipt() throws {
+  func testOfflineCaptureWritesBoundSceneReceipt() throws {
   let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
   defer { try? FileManager.default.removeItem(at: directory) }
   let bytes = Data(DemoScene.fourRoleJSON.utf8)
@@ -133,25 +134,26 @@ import LatticewakeBridge
   let wav = try Data(contentsOf: url)
   let receiptData = try Data(contentsOf: url.appendingPathExtension("receipt.json"))
   let savedReceipt = try JSONDecoder().decode(CaptureReceiptV1.self, from: receiptData)
-  #expect(wav.prefix(4) == Data("RIFF".utf8))
-  #expect(receipt.sceneSHA256 == SceneLibrary.receipt(for: bytes).sha256)
-  #expect(receipt.frameCount == 384_000 && receipt.roleTransport)
-  #expect(savedReceipt == receipt)
+  XCTAssertEqual(wav.prefix(4), Data("RIFF".utf8))
+  XCTAssertEqual(receipt.sceneSHA256, SceneLibrary.receipt(for: bytes).sha256)
+  XCTAssertTrue(receipt.frameCount == 384_000 && receipt.roleTransport)
+  XCTAssertEqual(savedReceipt, receipt)
 }
 
-@Test func roleTracePreviewIsDeterministic() throws {
+  func testRoleTracePreviewIsDeterministic() throws {
   let bytes = Data(DemoScene.canonicalJSON.utf8)
   let first = try RoleTraceBridge.preview(sceneBytes: bytes)
   let repeated = try RoleTraceBridge.preview(sceneBytes: bytes)
-  #expect(first == repeated)
-  #expect(first.eventCount > 0)
+  XCTAssertEqual(first, repeated)
+  XCTAssertGreaterThan(first.eventCount, 0)
 }
 
-@Test func auditionReceiptIsStructuredAndStable() {
+  func testAuditionReceiptIsStructuredAndStable() {
   let receipt = AuditionReceipt(sampleRate: 48_000, callbackCount: 12,
                                 renderedFrames: 6_144, maximumRenderNanoseconds: 123_000,
                                 deadlineMisses: 0, rejectedBlocks: 0)
-  #expect(receipt.machineLine == "LW_AUDITION_RECEIPT sample_rate=48000.0 callbacks=12 frames=6144 max_render_ns=123000 deadline_misses=0 rejected_blocks=0")
-  #expect(receipt.statusText.contains("48000 Hz"))
-  #expect(receipt.fileContents.hasSuffix("\n"))
+  XCTAssertEqual(receipt.machineLine, "LW_AUDITION_RECEIPT sample_rate=48000.0 callbacks=12 frames=6144 max_render_ns=123000 deadline_misses=0 rejected_blocks=0")
+  XCTAssertTrue(receipt.statusText.contains("48000 Hz"))
+  XCTAssertTrue(receipt.fileContents.hasSuffix("\n"))
+  }
 }

@@ -30,9 +30,11 @@ SwiftUI app uses an AVAudioEngine host with a C++ terrain bridge, saved Scene
 bytes, QWERTY direct notes, and trackpad expression.
 
 The C++ bridge now has a fixed SPSC input queue, two persistent prepared plan
-slots, and bridge-level render allocation tests. It is still not admitted to a device callback: see the
+slots, bridge-level render allocation tests, and deterministic role scheduling.
+It is still not admitted to a device callback: see the
 [real-time admission gate](docs/REALTIME_ADMISSION.md). No target-device
-performance or human listening result is claimed.
+human listening result is claimed. A Cycle 032 target-device smoke run is
+recorded as technical evidence only.
 
 The native Terrain Stage now renders a 256-point immutable C++ terrain trace in
 a SwiftUI 2D Canvas. It is an initial scene visualization, not a Metal field,
@@ -44,14 +46,11 @@ it has not received a hardware session, MIDI output support, or per-note MPE
 voice-rendering hardware proof. The portable kernel does retain expression per
 fixed voice and has deterministic fixtures for note-specific routing.
 
-The Stage also exposes four draft role controls. Applying them is explicit: it
-writes validated canonical Scene bytes, then refreshes the prepared scene and
-terrain snapshot; it does not yet schedule role notes in the audio callback.
-
-Applying or restoring a scene also generates one bounded, offline role-event
-preview window and displays its deterministic trace receipt. This is traceable
-material for review and replay—not a live sequencer or a statement about the
-audible result.
+The Stage exposes four role controls and a live role transport. Role events are
+prepared deterministically outside the callback and consumed through the same
+bounded source-aware event path as direct play. The deterministic preview trace
+remains visible for review and replay; neither it nor device metrics are an
+aesthetic judgment.
 
 The audio adapter now exposes callback-route preflight counters and rejects
 blocks above 4,096 frames as silence. Its bridge stress evidence is documented

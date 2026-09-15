@@ -8,10 +8,11 @@ third-party plug-ins.
 ## Artist-facing workspaces
 
 **Terrain Stage** is the default: an authoritative 2D terrain surface, direct
-play, role strip, engine macros, and runtime status. The first implementation
-is a SwiftUI Canvas trace sourced from immutable C++ terrain-frame snapshots;
-an optional Metal field renderer and 3D view remain later adapters. The Stage
-stays immediate even as the instrument gains depth.
+play, role strip, engine macros, and runtime status. The current SwiftUI Canvas
+trace is a prototype sourced from immutable C++ terrain-frame snapshots. The
+next visual milestone replaces it with an authoritative Metal 2D contour
+surface; 3D remains an optional secondary view. The Stage stays visible while
+contextual drawers provide depth.
 
 **Scene**, **Generator**, and **Library** are progressive workspaces over the
 same canonical scene model. Scene edits terrain, harmony, roles, paths, and
@@ -25,12 +26,13 @@ not baseline commitments.
 The C++ core owns canonical scene interpretation and audio rendering. SwiftUI,
 Metal, Core Audio, Core MIDI, and a future AUv3 are adapters.
 
-The current core has one prepared terrain voice. Its next architectural step is
-an internal **EngineRack**: prepared voice slots that share a stable expressive
-contract for note identity, pitch/glide, velocity, pressure, slide, timbre,
-modulation, gate, and panic. Terrain remains the signature engine. Wavetable,
-granular/sample-derived, resonator/physical, noise-particle, and learned-model
-engines can join one at a time after the rack contract exists.
+The current core has one prepared terrain voice. Before the EngineRack, Scene
+v1 separates **Surface**, **Traversal**, and **Articulation**, and one portable
+RenderPlanBuilder becomes the preparation authority. The later internal
+**EngineRack** provides prepared slots with a stable expressive contract for
+note identity, pitch/glide, velocity, pressure, slide, timbre, modulation,
+gate, and panic. Terrain remains the signature engine; a terrain-excited
+resonator is the first planned additional engine.
 
 Four initial roles—Drone, Pad, Motif A, and Motif B—are the first performance
 surface. Scene storage must evolve them as scalable named lanes, each routed to
@@ -76,11 +78,11 @@ until proposal preview/commit is working.
 ## Release progression
 
 1. Admit the standalone C++ bridge through measurable real-time evidence.
-2. Complete Terrain Stage, direct play, MPE, four roles, deterministic replay,
-   and scene library.
-3. Introduce the EngineRack, modulation routing, buses/effects, and one new
-   internal engine at a time.
-4. Add deterministic generators, proposal studio, specialist providers, and
-   then explicitly armed co-performance.
-5. Export MIDI/MPE, audio/stems, and scene interchange; ship a focused AUv3
-   companion only after the standalone path is proven.
+2. Introduce Scene v1, the prepared RenderPlanBuilder, and the luminous Metal
+   Terrain Stage; complete direct-play and MPE admission.
+3. Add Surface/Traversal/Articulation editing, modulation, audio-derived
+   surfaces, Freeze and Grow, and deeper deterministic lanes.
+4. Introduce the EngineRack, a resonator engine, prepared buses/effects, scene
+   chains, captures, and export.
+5. Add specialist proposal providers and optional Apple Intelligence; ship a
+   focused AUv3 companion only after the standalone path is proven.
