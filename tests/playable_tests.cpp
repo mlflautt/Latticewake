@@ -55,6 +55,35 @@ int main() {
   const std::array<KernelEvent,2> duplicate{{{0,true,60,.7F},{1000,true,60,.7F}}};
   assert(reference.render(b,single) && repeated.render(c,duplicate));
   assert(b==c);
+  reference.reset(); repeated.reset();
+  const std::array<KernelEvent,2> timbre{{{0,true,60,.7F},{0,false,60,0,0,1,1,true}}};
+  assert(reference.render(b,single) && repeated.render(c,timbre));
+  double morphDifference=0;
+  for (std::size_t i=2048; i<b.size(); ++i) morphDifference += std::abs(b[i]-c[i]);
+  assert(morphDifference > 1);
+  auto harmonic = [](const std::vector<float>& samples, double hz) {
+    double re=0, im=0;
+    for (std::size_t i=2048; i<samples.size(); ++i) {
+      const double phase=6.283185307179586*hz*double(i)/48000;
+      re+=samples[i]*std::cos(phase); im+=samples[i]*std::sin(phase);
+    }
+    return std::hypot(re,im);
+  };
+  const double c4=440*std::pow(2.,-9./12.);
+  const double baseRatio=harmonic(b,2*c4)/harmonic(b,c4);
+  const double morphRatio=harmonic(c,2*c4)/harmonic(c,c4);
+  assert(std::abs(morphRatio-baseRatio) > .05);
+  std::vector<float> glide(72000);
+  repeated.reset();
+  const std::array<KernelEvent,2> glideEvents{{{0,true,60,.7F},{0,false,60,0,1,1,0,true}}};
+  assert(repeated.render(glide,glideEvents));
+  int bestLag=0; double bestGlideError=1e9;
+  for(int lag=80;lag<105;++lag) {
+    double diff=0;
+    for(int i=48000;i<52000;++i) { double d=glide[i]-glide[i+lag];diff+=d*d; }
+    if(diff<bestGlideError) { bestGlideError=diff;bestLag=lag; }
+  }
+  assert(std::abs((48000./bestLag)/(2*c4)-1) < .01);
   std::vector<float> demo;
   for (int note : {60, 64, 67}) {
     RealtimeKernel kernel;

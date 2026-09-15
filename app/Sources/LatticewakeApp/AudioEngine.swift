@@ -1,5 +1,6 @@
 import AVFoundation
 import Darwin
+import LatticewakeBridge
 
 @_silgen_name("lw_kernel_create") private func lw_kernel_create() -> OpaquePointer?
 @_silgen_name("lw_kernel_destroy") private func lw_kernel_destroy(_ kernel: OpaquePointer)
@@ -69,6 +70,8 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
 
 @MainActor final class LatticewakeAudio: ObservableObject {
   @Published private(set) var running = false
+  @Published private(set) var outputPeak: Double = 0
+  func refreshMeter() { outputPeak = kernel.map { Double(lw_kernel_output_peak($0)) } ?? 0 }
   @Published private(set) var callbackStatus = "No callback blocks rendered."
   @Published private(set) var auditionReceipt: AuditionReceipt?
   private let engine = AVAudioEngine()

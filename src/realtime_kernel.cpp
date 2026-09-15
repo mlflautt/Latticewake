@@ -17,6 +17,10 @@ bool prepareTerrainPlan(const Scene& scene, double rate, PreparedTerrainPlan& pl
   float peak = 0;
   for (auto& value : plan.terrainTable) { value -= mean; peak = std::max(peak, std::fabs(value)); }
   for (auto& value : plan.terrainTable) value = plan.variation > 1e-6F && peak > 1e-6F ? value / peak : 0;
+  // A second terrain-derived spectrum: traverse the same periodic table twice.
+  // Both immutable tables share the scene and require no callback preparation.
+  for (std::size_t i=0; i<plan.morphTable.size(); ++i)
+    plan.morphTable[i] = .35F * plan.terrainTable[i] + .65F * plan.terrainTable[(2*i)%plan.terrainTable.size()];
   plan.sampleRate = float(rate); plan.ready = true;
   return true;
 }
@@ -34,6 +38,7 @@ void RealtimeKernel::reset() noexcept {
 bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> events) noexcept {
   if (!ready_ || !activePlan_ || events.size() > kMaxEvents) return false;
   std::size_t next = 0;
+  const float smoothing = 1.0F - std::exp(-1.0F / (.010F * sampleRate_));
   for (std::size_t f = 0; f < out.size(); ++f) {
     while (next < events.size() && events[next].frame == f) {
       const auto& e = events[next++];
@@ -68,13 +73,19 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
     for (auto& v : voices_) if (v.active) {
       if (v.releasing) { v.envelope = std::max(0.0F, v.envelope - v.releaseStep); if (v.envelope <= 1e-6F) { v = {}; continue; } }
       else v.envelope = std::min(1.0F, v.envelope + 1.0F / (0.010F * sampleRate_));
-      const float position = v.phase * kTableSize + v.slide * (kTableSize - 1);
+      v.smoothGlide += smoothing * (v.glide-v.smoothGlide);
+      v.smoothSlide += smoothing * (v.slide-v.smoothSlide);
+      const float position = v.phase * kTableSize;
       const auto index = std::size_t(position);
       const float fraction = position - float(index);
       const float a = activePlan_->terrainTable[index % kTableSize];
       const float b = activePlan_->terrainTable[(index + 1) % kTableSize];
-      input += (a + fraction * (b - a)) * v.gain * v.press * v.envelope * 0.125F;
-      v.phase += v.increment * std::pow(2.0F, v.glide / 12);
+      const float ma = activePlan_->morphTable[index % kTableSize];
+      const float mb = activePlan_->morphTable[(index+1) % kTableSize];
+      const float base = a + fraction * (b-a);
+      const float morph = ma + fraction * (mb-ma);
+      input += (base + v.smoothSlide*(morph-base)) * v.gain * v.press * v.envelope * 0.125F;
+      v.phase += v.increment * std::pow(2.0F, v.smoothGlide);
       v.phase -= std::floor(v.phase);
     }
     const float dc = input - previousInput_ + 0.997F * previousOutput_;

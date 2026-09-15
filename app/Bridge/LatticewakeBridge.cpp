@@ -50,6 +50,7 @@ struct LWKernelRef {
   alignas(64) std::atomic<std::uint64_t> callbackCount{0};
   std::atomic<std::uint64_t> renderedFrames{0};
   std::atomic<std::uint64_t> renderFailures{0};
+  std::atomic<float> outputPeak{0};
   std::atomic<std::uint64_t> maximumRenderNanoseconds{0};
   std::atomic<std::uint64_t> deadlineMisses{0};
   double callbackSampleRate{0.0};
@@ -144,6 +145,9 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   while(count<events.size()&&k->events.tryPop(event)) events[count++]=event;
   const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);
   const bool rendered=k->plans[active].kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count));
+  float peak=0;
+  if(rendered) for(unsigned int i=0;i<frames;++i) peak=std::max(peak,std::fabs(out[i]));
+  k->outputPeak.store(peak,std::memory_order_relaxed);
   const auto elapsed=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count());
   updateMaximum(k->maximumRenderNanoseconds,elapsed);
   const auto deadline=static_cast<std::uint64_t>(static_cast<double>(frames)*1000000000.0/k->callbackSampleRate);
@@ -163,6 +167,7 @@ int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
   status->pending_plan_generation=pending==kNoPlan?0:k->plans[pending].generation.load(std::memory_order_acquire);
   return 1;
 }
+float lw_kernel_output_peak(const LWKernelRef* k) { return k?k->outputPeak.load(std::memory_order_relaxed):0; }
 int lw_kernel_callback_status(const LWKernelRef* k,LWCallbackStatus* status) {
   if(!k||!status)return 0;
   *status={k->callbackCount.load(std::memory_order_relaxed),k->renderedFrames.load(std::memory_order_relaxed),k->renderFailures.load(std::memory_order_relaxed),k->maximumRenderNanoseconds.load(std::memory_order_relaxed),k->deadlineMisses.load(std::memory_order_relaxed),kMaximumCallbackFrames};

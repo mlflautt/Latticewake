@@ -221,6 +221,10 @@ open.
 
 ### Cycles 029–031 — accepted implementation sequence
 
+Cycle 029 implementation checkpoint: see handoffs/cycle-029-checkpoint.md.
+Automated gesture, spectral, glide, callback, and device checks pass. Native
+input verification remains open; this is not a completed cycle.
+
 029: both-mode gestures, prepared timbre morph, visible performance feedback.
 030: audible role transport, source-aware identities, deterministic sequencing.
 031: versioned scene library, undo, captures, and three starter scenes.

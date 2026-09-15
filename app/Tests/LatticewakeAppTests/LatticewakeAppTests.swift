@@ -16,6 +16,21 @@ import LatticewakeBridge
   #expect(keys.held.isEmpty)
 }
 
+@Test func gestureOwnershipAndResize() {
+  var pointer = GestureState()
+  let note = pointer.begin(held: [])
+  #expect(note == 48)
+  let duplicate = pointer.begin(held: [60])
+  #expect(duplicate == nil)
+  #expect(pointer.targets == [48])
+  let release = pointer.end()
+  #expect(release.note == 48 && !pointer.active)
+  let shaping = pointer.begin(held: [60,64])
+  #expect(shaping == nil && pointer.targets == [60,64])
+  #expect(GestureState.normalized(100,length: 200) == GestureState.normalized(300,length: 600))
+  #expect(GestureState.normalized(-20,length: 200) == 0)
+}
+
 @Test func audioCallbackRunsOnBackgroundThread() async {
   let success = await withCheckedContinuation { continuation in
     DispatchQueue.global().async {

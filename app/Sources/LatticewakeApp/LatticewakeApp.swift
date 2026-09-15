@@ -17,6 +17,8 @@ struct ContentView: View {
   @State private var roles: [RoleControl] = []
   @State private var roleTrace = RoleTraceSummary.empty
   @State private var keyboard = KeyboardState()
+  @State private var gesture = GestureState()
+  @State private var pointer: CGPoint?
   var body: some View {
     VStack(spacing: 14) {
       Text("Latticewake").font(.largeTitle)
@@ -44,14 +46,27 @@ struct ContentView: View {
       if !roles.isEmpty {
         RoleControlsView(controls: $roles, apply: applyRoleChanges)
       }
-      TerrainStageView(snapshot: terrain.snapshot)
-        .frame(height: 280)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-        .contentShape(Rectangle())
-        .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-          audio.expression(glide: value.location.x / 210 - 1, press: 0.7,
-                           slide: min(1, max(0, value.location.y / 280)))
-        })
+      Text("Hold keys for notes. Drag to play C3, or shape held keys. Left/right: pitch • up/down: timbre.").font(.caption)
+      Text("Sampling path").font(.caption)
+      ProgressView("Output", value: audio.outputPeak, total: 1).frame(maxWidth: 300)
+      GeometryReader { geometry in
+        TerrainStageView(snapshot: terrain.snapshot)
+          .overlay(alignment: .topLeading) {
+            if let pointer { Circle().stroke(.orange, lineWidth: 3).frame(width: 18,height: 18).position(pointer) }
+          }
+          .clipShape(RoundedRectangle(cornerRadius: 12))
+          .contentShape(Rectangle())
+          .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+            guard audio.running else { return }
+            if let note = gesture.begin(held: keyboard.held) { audio.play(note: note) }
+            let x = GestureState.normalized(value.location.x, length: geometry.size.width)
+            let y = GestureState.normalized(value.location.y, length: geometry.size.height)
+            pointer = CGPoint(x: x*geometry.size.width,y: y*geometry.size.height)
+            for note in gesture.targets { audio.midiNoteExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
+          }.onEnded { _ in endGesture() })
+      }.frame(height: 280)
+      Text("Held notes: \(keyboard.held.sorted().map(String.init).joined(separator: ", "))\(gesture.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
+      DisclosureGroup("Diagnostics") {
       if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
       if roleTrace.eventCount > 0 {
         Text("Role preview: \(roleTrace.eventCount) events • trace \(roleTrace.receiptText)").font(.caption).foregroundStyle(.secondary)
@@ -59,6 +74,7 @@ struct ContentView: View {
       Text("256 immutable trace points • sample \(terrain.snapshot.sampleOffset)").font(.caption).foregroundStyle(.secondary)
       Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
       Text(audio.callbackStatus).font(.caption).foregroundStyle(.secondary)
+      }
       HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { midi.panic() } }
       HStack {
         Picker("MIDI", selection: Binding(get: { midi.mode }, set: { midi.configure(mode: $0) })) {
@@ -91,10 +107,20 @@ struct ContentView: View {
       if press.phase == .up, keyboard.up(note) { audio.release(note: note) }
       return .handled
     }.onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+      endGesture()
       for note in keyboard.releaseAll() { audio.release(note: note) }
+    }.onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
+      audio.refreshMeter()
     }.onChange(of: audio.running) { _, running in
-      if !running { _ = keyboard.releaseAll() }
+      if !running { endGesture(); _ = keyboard.releaseAll() }
     }.onDisappear { for note in keyboard.releaseAll() { audio.release(note: note) }; midi.stop(); audio.stop() }
+  }
+
+  private func endGesture() {
+    let ended = gesture.end()
+    if let note = ended.note { audio.release(note: note) }
+    for note in ended.targets { audio.midiNoteExpression(note: note, glide: 0, press: 1, slide: 0) }
+    pointer = nil
   }
 
   private func applyRoleChanges() {

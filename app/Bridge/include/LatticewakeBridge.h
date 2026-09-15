@@ -5,6 +5,7 @@ extern "C" {
 const char* latticewake_core_version(void);
 typedef struct LWKernelRef LWKernelRef;
 typedef struct LWMpeStateRef LWMpeStateRef;
+float lw_kernel_output_peak(const LWKernelRef* kernel);
 typedef struct LWKernelStatus {
   unsigned int pending_events;
   unsigned int dropped_events;
