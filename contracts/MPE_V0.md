@@ -49,8 +49,8 @@ scene replacement.
 
 ## Current implementation status
 
-Cycle 020 implements Core MIDI ingress, source lifecycle, and validated
-legacy/lower/upper channel ownership through the portable bridge. It also
-decodes pitch bend, channel pressure, CC74, and sustain. The current terrain
-kernel still applies accepted expression as global voice state; independent
-per-note rendering remains a required later kernel change.
+Cycles 020–021 implement Core MIDI ingress, source lifecycle, and validated
+legacy/lower/upper channel ownership through the portable bridge. They decode
+pitch bend, channel pressure, CC74, and sustain, then retain accepted glide,
+press, and slide in the owning fixed terrain voice. Hardware validation, zone
+voice stealing, and MIDI output remain later work.

@@ -31,6 +31,7 @@ int lw_terrain_frame_scene_json(const char* json, unsigned long long sample_offs
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);
 int lw_kernel_note_off(LWKernelRef* kernel, int note);
 int lw_kernel_expression(LWKernelRef* kernel, float glide, float press, float slide);
+int lw_kernel_note_expression(LWKernelRef* kernel, int note, float glide, float press, float slide);
 int lw_kernel_render(LWKernelRef* kernel, float* output, unsigned int frames);
 int lw_kernel_status(const LWKernelRef* kernel, LWKernelStatus* status);
 unsigned int lw_kernel_event_queue_capacity(void);
@@ -40,6 +41,7 @@ void lw_mpe_state_destroy(LWMpeStateRef* state);
 int lw_mpe_note_on(LWMpeStateRef* state, int channel, int note);
 int lw_mpe_note_off(LWMpeStateRef* state, int channel, int note);
 int lw_mpe_expression(LWMpeStateRef* state, int channel, float glide, float press, float slide);
+int lw_mpe_active_note(const LWMpeStateRef* state, int channel, int* note);
 void lw_mpe_reset(LWMpeStateRef* state);
 #ifdef __cplusplus
 }

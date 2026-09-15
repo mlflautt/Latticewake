@@ -41,7 +41,8 @@ a SwiftUI 2D Canvas. It is an initial scene visualization, not a Metal field,
 Core MIDI sources are now discovered by the standalone app with Legacy, MPE
 Lower, and MPE Upper ingress modes. This is tested packet/ownership routing;
 it has not received a hardware session, MIDI output support, or per-note MPE
-voice-rendering proof.
+voice-rendering hardware proof. The portable kernel does retain expression per
+fixed voice and has deterministic fixtures for note-specific routing.
 
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).

@@ -47,6 +47,7 @@ enum MIDIMessageDecoder {
 @_silgen_name("lw_mpe_note_on") private func lw_mpe_note_on(_ state: OpaquePointer, _ channel: Int32, _ note: Int32) -> Int32
 @_silgen_name("lw_mpe_note_off") private func lw_mpe_note_off(_ state: OpaquePointer, _ channel: Int32, _ note: Int32) -> Int32
 @_silgen_name("lw_mpe_expression") private func lw_mpe_expression(_ state: OpaquePointer, _ channel: Int32, _ glide: Float, _ press: Float, _ slide: Float) -> Int32
+@_silgen_name("lw_mpe_active_note") private func lw_mpe_active_note(_ state: OpaquePointer, _ channel: Int32, _ note: UnsafeMutablePointer<Int32>) -> Int32
 @_silgen_name("lw_mpe_reset") private func lw_mpe_reset(_ state: OpaquePointer)
 
 @MainActor final class MIDIIngress: ObservableObject {
@@ -160,7 +161,9 @@ enum MIDIMessageDecoder {
 
   private func applyExpression(channel: Int, glide: Double, press: Double, slide: Double) {
     guard let mpe, lw_mpe_expression(mpe, Int32(channel), Float(glide), Float(press), Float(slide)) != 0 else { return }
-    audio?.midiExpression(glide: glide, press: press, slide: slide)
+    var note: Int32 = 0
+    guard lw_mpe_active_note(mpe, Int32(channel), &note) != 0 else { return }
+    audio?.midiNoteExpression(note: Int(note), glide: glide, press: press, slide: slide)
   }
 
   nonisolated private static func messages(from list: UnsafePointer<MIDIPacketList>) -> [MIDIMessage] {

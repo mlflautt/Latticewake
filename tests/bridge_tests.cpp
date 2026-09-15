@@ -105,6 +105,8 @@ void testMpeBridgeState() {
   assert(lw_mpe_note_on(lower, 1, 60) == 0);
   assert(lw_mpe_note_on(lower, 2, 60) == 1);
   assert(lw_mpe_expression(lower, 2, 0.25F, 0.5F, 0.75F) == 1);
+  int note = 0;
+  assert(lw_mpe_active_note(lower, 2, &note) == 1 && note == 60);
   assert(lw_mpe_note_off(lower, 2, 60) == 1);
   lw_mpe_reset(lower);
   lw_mpe_state_destroy(lower);

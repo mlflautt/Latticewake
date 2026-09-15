@@ -347,6 +347,7 @@ void testDirectPlayAndTerrainFrames() {
 }
 void testMpeState() { using namespace latticewake; MpeState lower({MpeMode::lower,1,2}); assert(!lower.noteOn(1,60)); assert(lower.noteOn(2,60)); assert(lower.expression(2,{0.2,0.3,0.4})); assert(lower.active(2)->expression.press==0.3); assert(!lower.noteOn(2,61)); assert(lower.noteOff(2,60)); MpeState upper({MpeMode::upper,16,2}); assert(upper.noteOn(15,62)); MpeState legacy({MpeMode::legacy,4,1}); assert(legacy.noteOn(4,64)); assert(!legacy.noteOn(5,64)); }
 void testRealtimeKernel() { using namespace latticewake; Scene scene=validScene();scene.terrain.kind="mandelbrot";PreparedTerrainPlan first{};PreparedTerrainPlan repeated{};assert(prepareTerrainPlan(scene,48000,first));assert(prepareTerrainPlan(scene,48000,repeated));assert(first.ready&&first.sampleRate==48000&&first.terrainTable==repeated.terrainTable);RealtimeKernel kernel;assert(kernel.activate(first));std::array<float,128> buffer{};const std::array<KernelEvent,2> events={{{0,true,60,0.5F},{96,false,60,0}}};assert(kernel.render(buffer,events));for(float s:buffer)assert(std::isfinite(s)&&s>=-1&&s<=1);std::array<KernelEvent,RealtimeKernel::kMaxEvents+1> tooMany{};assert(!kernel.render(buffer,tooMany));kernel.reset();const std::array<KernelEvent,3> independentNotes={{{0,true,60,0.5F},{0,true,64,0.5F},{1,false,64,0}}};assert(kernel.render(buffer,independentNotes)); }
+void testPerNoteKernelExpression() { using namespace latticewake; Scene scene=validScene();scene.terrain.kind="julia";scene.terrain.offsetX=0.1;scene.terrain.offsetY=0.2;RealtimeKernel first;RealtimeKernel second;assert(first.prepare(scene,48000)&&second.prepare(scene,48000));std::array<float,512> firstBuffer{};std::array<float,512> secondBuffer{};const std::array<KernelEvent,3> firstEvents={{{0,true,60,0.6F},{0,true,64,0.6F},{1,false,60,0,0,0,0,true}}};const std::array<KernelEvent,3> secondEvents={{{0,true,60,0.6F},{0,true,64,0.6F},{1,false,64,0,0,0,0,true}}};assert(first.render(firstBuffer,firstEvents));assert(second.render(secondBuffer,secondEvents));bool differs=false;for(std::size_t index=0;index<firstBuffer.size();++index){assert(std::isfinite(firstBuffer[index])&&std::isfinite(secondBuffer[index]));differs=differs||firstBuffer[index]!=secondBuffer[index];}assert(differs); }
 
 }  // namespace
 
@@ -364,5 +365,6 @@ int main() {
   testDirectPlayAndTerrainFrames();
   testMpeState();
   testRealtimeKernel();
+  testPerNoteKernelExpression();
   return 0;
 }

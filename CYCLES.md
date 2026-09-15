@@ -144,12 +144,17 @@ heard, approved, or preferred.
 - Non-goals: hardware session, MIDI output, independent per-note MPE DSP,
   callback admission, or human listening evidence.
 
-## Next-cycle options
-
 ### Cycle 021 — per-note MPE kernel expression
 
-Carry note identity through bounded expression events, retain per-note values
-inside fixed voice slots, and prove independent voice expression fixtures.
+- Scope: note-identified bridge events and fixed-voice glide/press/slide state
+  with MPE active-note resolution.
+- Evidence: deterministic different-target per-note expression fixture,
+  bridge active-note fixture, normal/sanitizer/Swift checks; see
+  `handoffs/cycle-021.md`.
+- Non-goals: hardware MPE session, zone voice stealing, MIDI output, callback
+  admission, or human listening evidence.
+
+## Next-cycle options
 
 ### Cycle 022 — four-role performance controls
 

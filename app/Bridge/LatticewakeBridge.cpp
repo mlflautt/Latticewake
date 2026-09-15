@@ -83,7 +83,8 @@ int lw_terrain_frame_scene_json(const char* json,const unsigned long long sample
 }
 int lw_kernel_note_on(LWKernelRef* k,int n,float v) { return k&&k->events.tryPush({0,true,n,v}) ? 1 : 0; }
 int lw_kernel_note_off(LWKernelRef* k,int n) { return k&&k->events.tryPush({0,false,n,0}) ? 1 : 0; }
-int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { return k&&k->events.tryPush({0,false,0,0,glide,press,slide,true}) ? 1 : 0; }
+int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { return k&&k->events.tryPush({0,false,-1,0,glide,press,slide,true}) ? 1 : 0; }
+int lw_kernel_note_expression(LWKernelRef* k,int note,float glide,float press,float slide) { return k&&note>=0&&note<=127&&k->events.tryPush({0,false,note,0,glide,press,slide,true}) ? 1 : 0; }
 int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   if(!k||!out)return 0;
   k->renderBegun.store(true,std::memory_order_release);
@@ -119,4 +120,5 @@ void lw_mpe_state_destroy(LWMpeStateRef* state) { delete state; }
 int lw_mpe_note_on(LWMpeStateRef* state,const int channel,const int note) { return state&&state->state.noteOn(channel,note)?1:0; }
 int lw_mpe_note_off(LWMpeStateRef* state,const int channel,const int note) { return state&&state->state.noteOff(channel,note)?1:0; }
 int lw_mpe_expression(LWMpeStateRef* state,const int channel,const float glide,const float press,const float slide) { return state&&state->state.expression(channel,{glide,press,slide})?1:0; }
+int lw_mpe_active_note(const LWMpeStateRef* state,const int channel,int* note) { if(!state||!note)return 0;const auto active=state->state.active(channel);if(!active)return 0;*note=active->note;return 1; }
 void lw_mpe_reset(LWMpeStateRef* state) { if(state)state->state.reset(); }

@@ -55,9 +55,9 @@ exact-path instrumentation, overload stress, and target-device evidence before
 callback admission.
 
 Core MIDI ingress is marshalled onto that same Swift main-actor producer and
-uses a portable legacy/lower/upper MPE ownership state. Current terrain voices
-do not yet render expression independently per note; MPE ingress and MPE DSP
-admission remain separate milestones.
+uses a portable legacy/lower/upper MPE ownership state. Fixed terrain voices
+now retain glide, press, and slide independently by note; hardware MPE and
+MPE timing admission remain separate milestones.
 
 ## Generative and agent boundary
 

@@ -7,6 +7,7 @@ import AVFoundation
 @_silgen_name("lw_kernel_publish_scene_json") private func lw_kernel_publish_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_note_on") private func lw_kernel_note_on(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float) -> Int32
 @_silgen_name("lw_kernel_expression") private func lw_kernel_expression(_ kernel: OpaquePointer, _ glide: Float, _ press: Float, _ slide: Float) -> Int32
+@_silgen_name("lw_kernel_note_expression") private func lw_kernel_note_expression(_ kernel: OpaquePointer, _ note: Int32, _ glide: Float, _ press: Float, _ slide: Float) -> Int32
 @_silgen_name("lw_kernel_note_off") private func lw_kernel_note_off(_ kernel: OpaquePointer, _ note: Int32) -> Int32
 @_silgen_name("lw_kernel_render") private func lw_kernel_render(_ kernel: OpaquePointer, _ output: UnsafeMutablePointer<Float>, _ frames: UInt32) -> Int32
 
@@ -76,6 +77,6 @@ import AVFoundation
   func expression(glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_expression(kernel, Float(glide), Float(press), Float(slide)) } }
   func midiPlay(note: Int, velocity: Double) -> Bool { guard let kernel else { return false }; return lw_kernel_note_on(kernel, Int32(note), Float(velocity)) != 0 }
   func midiRelease(note: Int) -> Bool { guard let kernel else { return false }; return lw_kernel_note_off(kernel, Int32(note)) != 0 }
-  func midiExpression(glide: Double, press: Double, slide: Double) { expression(glide: glide, press: press, slide: slide) }
+  func midiNoteExpression(note: Int, glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_note_expression(kernel, Int32(note), Float(glide), Float(press), Float(slide)) } }
   func midiPanic() { stop() }
 }
