@@ -226,7 +226,9 @@ Automated gesture, spectral, glide, callback, and device checks pass. Native
 input verification remains open; this is not a completed cycle.
 
 029: both-mode gestures, prepared timbre morph, visible performance feedback.
-030: audible role transport, source-aware identities, deterministic sequencing.
+030: implemented role transport, source-aware identities, and deterministic
+sequencing; see handoffs/cycle-030.md. Target-device and listening evidence are
+still separate from the technical fixtures.
 031: versioned scene library, undo, captures, and three starter scenes.
 
 Each target stays open until its stated functional tests pass. Device and human

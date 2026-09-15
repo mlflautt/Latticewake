@@ -141,6 +141,47 @@ void testRolePreviewBoundary() {
   assert(lw_role_preview_scene_json(kCanonicalScene, 0, 0, 48000.0, &first) == 0);
 }
 
+void testPreparedRoleTransportAndSourceOwnership() {
+  LWKernelRef* const kernel = lw_kernel_create();
+  assert(kernel != nullptr);
+  assert(lw_kernel_prepare_demo(kernel, 48000.0) == 1);
+  LWRoleStatus ready{};
+  assert(lw_kernel_role_status(kernel, &ready) == 1);
+  assert(ready.running == 0U && ready.loop_frames == 192000U);
+  // Two direct sources may own the same pitch. Releasing one must not release
+  // the other, and role sources are a separate address space again.
+  assert(lw_kernel_note_on_source(kernel, 60, 0.7F, 1) == 1);
+  assert(lw_kernel_note_on_source(kernel, 60, 0.7F, 2) == 1);
+  assert(lw_kernel_note_off_source(kernel, 60, 1) == 1);
+  std::array<float, 256> output{};
+  assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+  double directEnergy = 0;
+  for(const float sample: output) directEnergy += std::abs(sample);
+  assert(directEnergy > 0.01);
+
+  lw_kernel_set_roles_running(kernel, 1);
+  allocations.store(0, std::memory_order_relaxed);
+  countAllocations.store(true, std::memory_order_relaxed);
+  assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+  countAllocations.store(false, std::memory_order_relaxed);
+  assert(allocations.load(std::memory_order_relaxed) == 0U);
+  LWRoleStatus playing{};
+  assert(lw_kernel_role_status(kernel, &playing) == 1);
+  assert(playing.running == 1U && playing.active_lanes == 4U && playing.loop_frames == ready.loop_frames);
+  double roleEnergy = 0;
+  for(const float sample: output) roleEnergy += std::abs(sample);
+  assert(roleEnergy > 0.01);
+
+  lw_kernel_set_roles_running(kernel, 0);
+  for(unsigned int block=0; block<64U; ++block) {
+    assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+  }
+  LWRoleStatus stopped{};
+  assert(lw_kernel_role_status(kernel, &stopped) == 1);
+  assert(stopped.running == 0U && stopped.active_lanes == 0U);
+  lw_kernel_destroy(kernel);
+}
+
 void testCallbackRouteStressAndBounds() {
   assert(lw_kernel_maximum_callback_frames() == 4096U);
   std::array<float, 4096> output{};
@@ -205,6 +246,7 @@ int main() {
   testMpeBridgeState();
   testRoleControlCanonicalBoundary();
   testRolePreviewBoundary();
+  testPreparedRoleTransportAndSourceOwnership();
   testCallbackRouteStressAndBounds();
   return 0;
 }

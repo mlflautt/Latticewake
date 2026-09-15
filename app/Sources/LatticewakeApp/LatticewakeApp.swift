@@ -46,6 +46,8 @@ struct ContentView: View {
       if !roles.isEmpty {
         RoleControlsView(controls: $roles, apply: applyRoleChanges)
       }
+      Text(audio.rolesRunning ? "Roles playing • \(audio.activeRoleLanes) active lane\(audio.activeRoleLanes == 1 ? "" : "s")" : "Roles stopped")
+        .font(.caption).foregroundStyle(.secondary)
       Text("Hold keys for notes. Drag to play C3, or shape held keys. Left/right: pitch • up/down: timbre.").font(.caption)
       Text("Sampling path").font(.caption)
       ProgressView("Output", value: audio.outputPeak, total: 1).frame(maxWidth: 300)
@@ -58,11 +60,14 @@ struct ContentView: View {
           .contentShape(Rectangle())
           .gesture(DragGesture(minimumDistance: 0).onChanged { value in
             guard audio.running else { return }
-            if let note = gesture.begin(held: keyboard.held) { audio.play(note: note) }
+            if let note = gesture.begin(held: keyboard.held) { audio.pointerPlay(note: note) }
             let x = GestureState.normalized(value.location.x, length: geometry.size.width)
             let y = GestureState.normalized(value.location.y, length: geometry.size.height)
             pointer = CGPoint(x: x*geometry.size.width,y: y*geometry.size.height)
-            for note in gesture.targets { audio.midiNoteExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
+            for note in gesture.targets {
+              if note == gesture.pointerNote { audio.pointerExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
+              else { audio.keyboardExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
+            }
           }.onEnded { _ in endGesture() })
       }.frame(height: 280)
       Text("Held notes: \(keyboard.held.sorted().map(String.init).joined(separator: ", "))\(gesture.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
@@ -75,7 +80,14 @@ struct ContentView: View {
       Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
       Text(audio.callbackStatus).font(.caption).foregroundStyle(.secondary)
       }
-      HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { midi.panic() } }
+      HStack {
+        Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }
+        Button(audio.rolesRunning ? "Stop Roles" : "Play Roles") {
+          if !audio.running { do { try audio.start() } catch { self.error = error.localizedDescription; return } }
+          if audio.rolesRunning { audio.stopRoles() } else { audio.startRoles() }
+        }
+        Button("Panic") { midi.panic() }
+      }
       HStack {
         Picker("MIDI", selection: Binding(get: { midi.mode }, set: { midi.configure(mode: $0) })) {
           ForEach(LatticewakeMpeMode.allCases) { Text($0.rawValue).tag($0) }
@@ -118,8 +130,11 @@ struct ContentView: View {
 
   private func endGesture() {
     let ended = gesture.end()
-    if let note = ended.note { audio.release(note: note) }
-    for note in ended.targets { audio.midiNoteExpression(note: note, glide: 0, press: 1, slide: 0) }
+    if let note = ended.note { audio.pointerRelease(note: note) }
+    for note in ended.targets {
+      if note == ended.note { audio.pointerExpression(note: note, glide: 0, press: 1, slide: 0) }
+      else { audio.keyboardExpression(note: note, glide: 0, press: 1, slide: 0) }
+    }
     pointer = nil
   }
 

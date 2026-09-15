@@ -12,6 +12,7 @@ typedef struct LWKernelStatus {
   unsigned long long active_plan_generation;
   unsigned long long pending_plan_generation;
 } LWKernelStatus;
+typedef struct LWRoleStatus { unsigned int running; unsigned int active_lanes; unsigned long long loop_frames; } LWRoleStatus;
 typedef struct LWCallbackStatus {
   unsigned long long callback_count;
   unsigned long long rendered_frames;
@@ -59,10 +60,15 @@ int lw_role_preview_scene_json(const char* json, unsigned long long start_sample
 void lw_string_destroy(char* value);
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);
 int lw_kernel_note_off(LWKernelRef* kernel, int note);
+int lw_kernel_note_on_source(LWKernelRef* kernel, int note, float velocity, unsigned int source);
+int lw_kernel_note_off_source(LWKernelRef* kernel, int note, unsigned int source);
 int lw_kernel_expression(LWKernelRef* kernel, float glide, float press, float slide);
 int lw_kernel_note_expression(LWKernelRef* kernel, int note, float glide, float press, float slide);
+int lw_kernel_note_expression_source(LWKernelRef* kernel, int note, float glide, float press, float slide, unsigned int source);
 int lw_kernel_render(LWKernelRef* kernel, float* output, unsigned int frames);
 int lw_kernel_status(const LWKernelRef* kernel, LWKernelStatus* status);
+void lw_kernel_set_roles_running(LWKernelRef* kernel, unsigned int running);
+int lw_kernel_role_status(const LWKernelRef* kernel, LWRoleStatus* status);
 int lw_kernel_callback_status(const LWKernelRef* kernel, LWCallbackStatus* status);
 unsigned int lw_kernel_maximum_callback_frames(void);
 unsigned int lw_kernel_event_queue_capacity(void);

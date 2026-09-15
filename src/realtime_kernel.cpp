@@ -47,7 +47,7 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
         const float press = std::clamp(e.press, 0.0F, 1.0F);
         const float slide = std::clamp(e.slide, 0.0F, 1.0F);
         if (e.note < 0) { glide_ = glide; press_ = press; slide_ = slide; }
-        for (auto& v : voices_) if (v.active && (e.note < 0 || v.note == e.note)) {
+        for (auto& v : voices_) if (v.active && (e.note < 0 || (v.note == e.note && (e.source == 0 || v.source == e.source)))) {
           v.glide = glide; v.press = press; v.slide = slide;
         }
         continue;
@@ -55,16 +55,16 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
       if (e.noteOn && e.note >= 0 && e.note <= 127 && e.velocity >= 0 && e.velocity <= 1) {
         Voice* target = nullptr;
         bool held = false;
-        for (auto& v : voices_) if (v.active && v.note == e.note && !v.releasing) held = true;
+        for (auto& v : voices_) if (v.active && v.note == e.note && v.source == e.source && !v.releasing) held = true;
         if (held) continue;
         for (auto& v : voices_) if (!v.active) { target = &v; break; }
         if (!target) target = &*std::min_element(voices_.begin(), voices_.end(), [](const Voice& a, const Voice& b) { return a.age < b.age; });
         *target = {};
-        target->active = true; target->note = e.note; target->gain = e.velocity;
+        target->active = true; target->note = e.note; target->source = e.source; target->gain = e.velocity;
         target->increment = 440.0F * std::pow(2.0F, (float(e.note) - 69) / 12) / sampleRate_;
         target->glide = glide_; target->press = press_; target->slide = slide_; target->age = nextAge_++;
       } else {
-        for (auto& v : voices_) if (v.active && v.note == e.note && !v.releasing) {
+        for (auto& v : voices_) if (v.active && v.note == e.note && (e.source == 0 || v.source == e.source) && !v.releasing) {
           v.releasing = true; v.releaseStep = v.envelope / (0.120F * sampleRate_);
         }
       }
