@@ -12,7 +12,8 @@ Implemented:
 - Made the app bundle script fall back to Command Line Tools when the installed
   Xcode licence has not been accepted, while keeping build caches project-local.
 - Migrated the Swift fixture source from the unavailable `Testing` package to
-  XCTest so the full-Xcode route has a conventional supported test target.
+  XCTest. The hosted run exposed and closed a pointer-gesture ownership bug:
+  held-key shaping now returns no pointer-owned note, matching its state.
 - Corrected stale README language: role notes now run through the bounded live
   transport; deterministic preview traces remain separate evidence.
 
@@ -20,6 +21,7 @@ Verification:
 
 - Normal warnings-as-errors C++ suite: pass.
 - ASan/UBSan warnings-as-errors C++ suite: pass.
+- Hosted full-Xcode Swift suite at the final exact SHA: pass.
 - Ad-hoc-signed standalone bundle build and strict code-sign verification: pass.
 - Exact target app: Start did not reproduce the Cycle 027 isolation crash.
   Four Role Loop reached four active lanes and a nonzero output meter.
@@ -31,9 +33,10 @@ Verification:
 
 Open evidence and limits:
 
-- Full Swift tests are blocked until the user accepts the installed Xcode
+- Local Swift tests remain blocked until the user accepts the installed Xcode
   licence. The Command Line Tools SDK on this machine contains neither the
-  `Testing` nor `XCTest` module, so no Swift-test pass is claimed.
+  `Testing` nor `XCTest` module; the hosted full-Xcode suite is the Swift-test
+  evidence for this revision.
 - Cycle 029 native gesture acceptance is explicitly retained. Automated gesture,
   resize, ownership, glide, and spectral fixtures pass, but native interaction
   feel has not been established by this consolidation cycle.

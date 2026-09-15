@@ -245,10 +245,11 @@ observations remain separate evidence.
   device route, runs four active lanes, writes a deterministic eight-second
   capture, and stops with zero bridge budget misses or rejected blocks. See
   `handoffs/cycle-032.md` and `docs/REALTIME_ADMISSION.md`.
-- Retained gates: full Swift tests require acceptance of the installed Xcode
-  licence; Command Line Tools on this host provide neither `Testing` nor
-  `XCTest`. Native gesture feel, hardware MPE, human listening, and exact
-  callback lock/allocation admission also remain open.
+- Evidence: the hosted full-Xcode Swift suite passes. Local Swift tests remain
+  unavailable until the installed Xcode licence is accepted; Command Line
+  Tools on this host provide neither `Testing` nor `XCTest`. Native gesture
+  feel, hardware MPE, human listening, and exact callback lock/allocation
+  admission also remain open.
 
 ### Next implementation target — Cycle 033
 

@@ -9,7 +9,7 @@ struct GestureState {
     let normalizedPointer = min(127, max(0, pointerNote))
     self.pointerNote = held.isEmpty ? normalizedPointer : nil
     targets = held.isEmpty ? [normalizedPointer] : held.sorted()
-    return pointerNote
+    return self.pointerNote
   }
   mutating func end() -> (note: Int?, targets: [Int]) {
     let result = (pointerNote, targets)
