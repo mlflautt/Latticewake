@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import LatticewakeBridge
 
 @main struct LatticewakeApp: App {
@@ -15,9 +16,26 @@ struct ContentView: View {
   @State private var sceneURL: URL?
   @State private var roles: [RoleControl] = []
   @State private var roleTrace = RoleTraceSummary.empty
+  @State private var keyboard = KeyboardState()
   var body: some View {
     VStack(spacing: 14) {
       Text("Latticewake").font(.largeTitle)
+      Button("Try Playable Starter (unsaved)") {
+        do {
+          let bytes = Data(DemoScene.playableJSON.utf8)
+          try audio.setScene(bytes: bytes)
+          try terrain.prepare(sceneBytes: bytes)
+          roles = try RoleSceneBridge.controls(from: bytes)
+          roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
+          sceneBytes = bytes
+          sceneURL = nil
+          receipt = "Playable starter — unsaved"
+        } catch { self.error = error.localizedDescription }
+      }
+      if !terrain.snapshot.points.isEmpty,
+         (terrain.snapshot.points.map(\.value).max() ?? 0) - (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001 {
+        Text("This path produces no sustained tone.").foregroundStyle(.orange)
+      }
       HStack {
         Text("Terrain Stage").font(.headline)
         Spacer()
@@ -56,7 +74,7 @@ struct ContentView: View {
         let directory = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true).appendingPathComponent("Latticewake", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let url = directory.appendingPathComponent("scene-v0.json")
-        if !FileManager.default.fileExists(atPath: url.path) { _ = try SceneStore.saveCanonical(Data(DemoScene.canonicalJSON.utf8), to: url) }
+        if !FileManager.default.fileExists(atPath: url.path) { _ = try SceneStore.saveCanonical(Data(DemoScene.playableJSON.utf8), to: url) }
         let (bytes, loaded) = try SceneStore.loadCanonical(from: url)
         try audio.setScene(bytes: bytes)
         try terrain.prepare(sceneBytes: bytes)
@@ -67,12 +85,16 @@ struct ContentView: View {
         receipt = String(loaded.sha256.prefix(12))
       } catch { self.error = error.localizedDescription }
       midi.start(audio: audio)
-    }.onKeyPress { press in
-      let map = ["a":60,"w":61,"s":62,"e":63,"d":64,"f":65,"t":66,"g":67,"y":68,"h":69,"u":70,"j":71,"k":72]
-      guard let note = map[press.characters] else { return .ignored }
-      if press.phase == .down { audio.play(note: note) } else { audio.release(note: note) }
+    }.onKeyPress(phases: [.down, .up, .repeat]) { press in
+      guard let note = KeyboardState.notes[press.characters.lowercased()] else { return .ignored }
+      if press.phase == .down, audio.running, keyboard.down(note) { audio.play(note: note) }
+      if press.phase == .up, keyboard.up(note) { audio.release(note: note) }
       return .handled
-    }.onDisappear { midi.stop(); audio.stop() }
+    }.onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
+      for note in keyboard.releaseAll() { audio.release(note: note) }
+    }.onChange(of: audio.running) { _, running in
+      if !running { _ = keyboard.releaseAll() }
+    }.onDisappear { for note in keyboard.releaseAll() { audio.release(note: note) }; midi.stop(); audio.stop() }
   }
 
   private func applyRoleChanges() {

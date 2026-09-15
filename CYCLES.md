@@ -212,7 +212,18 @@ heard, approved, or preferred.
 
 ## Next-cycle options
 
-### Cycle 028 — recorded target-device audition
+### Cycle 028 — sustained terrain notes
 
-Run the protocol on the target Mac, preserve the returned technical receipt and
-human observation separately, then make an explicit admission decision.
+Implemented: centered terrain table, envelope, interpolation, keyboard lifecycle,
+explicit playable starter, objective pitch/energy tests and actual device smoke.
+See handoffs/cycle-028.md. Full native input review and callback admission remain
+open.
+
+### Cycles 029–031 — accepted implementation sequence
+
+029: both-mode gestures, prepared timbre morph, visible performance feedback.
+030: audible role transport, source-aware identities, deterministic sequencing.
+031: versioned scene library, undo, captures, and three starter scenes.
+
+Each target stays open until its stated functional tests pass. Device and human
+observations remain separate evidence.

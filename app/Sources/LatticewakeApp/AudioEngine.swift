@@ -25,7 +25,7 @@ private struct BridgeCallbackStatus {
   _ kernel: OpaquePointer, _ status: UnsafeMutablePointer<BridgeCallbackStatus>
 ) -> Int32
 
-private final class CallbackRenderState: @unchecked Sendable {
+final class CallbackRenderState: @unchecked Sendable {
   let kernel: OpaquePointer
   init(kernel: OpaquePointer) { self.kernel = kernel }
 }
@@ -57,10 +57,14 @@ private enum CallbackRenderRoute {
   }
 }
 
-private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) -> AVAudioSourceNode {
-  AVAudioSourceNode { @Sendable _, _, count, audioBufferList -> OSStatus in
+nonisolated func makeCallbackRenderBlock(_ state: CallbackRenderState) -> AVAudioSourceNodeRenderBlock {
+  { @Sendable _, _, count, audioBufferList -> OSStatus in
     CallbackRenderRoute.render(kernel: state.kernel, frameCount: count, audioBufferList: audioBufferList)
   }
+}
+
+private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) -> AVAudioSourceNode {
+  AVAudioSourceNode(renderBlock: makeCallbackRenderBlock(state))
 }
 
 @MainActor final class LatticewakeAudio: ObservableObject {

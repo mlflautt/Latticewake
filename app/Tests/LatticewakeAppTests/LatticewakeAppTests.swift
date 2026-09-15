@@ -1,6 +1,60 @@
 import Testing
 import Foundation
+import AVFoundation
+import LatticewakeBridge
 @testable import LatticewakeApp
+
+@Test func keyboardRepeatAndFocusRelease() {
+  var keys = KeyboardState()
+  let first = keys.down(60)
+  let repeated = keys.down(60)
+  let second = keys.down(64)
+  let released = keys.releaseAll()
+  let stale = keys.up(60)
+  #expect(first && !repeated && second && !stale)
+  #expect(released == [60,64])
+  #expect(keys.held.isEmpty)
+}
+
+@Test func audioCallbackRunsOnBackgroundThread() async {
+  let success = await withCheckedContinuation { continuation in
+    DispatchQueue.global().async {
+      let kernel = lw_kernel_create()!
+      defer { lw_kernel_destroy(kernel) }
+      let prepared = DemoScene.playableJSON.withCString { lw_kernel_prepare_scene_json(kernel, $0, 48000) }
+      let block = makeCallbackRenderBlock(CallbackRenderState(kernel: kernel))
+      let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
+      let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 512)!
+      buffer.frameLength = 512
+      _ = lw_kernel_note_on(kernel, 60, 0.7)
+      var silence = ObjCBool(false)
+      var timestamp = AudioTimeStamp()
+      let result = block(&silence, &timestamp, 512, buffer.mutableAudioBufferList)
+      let left = buffer.floatChannelData![0]
+      let right = buffer.floatChannelData![1]
+      let audible = (0..<512).contains { abs(left[$0]) > 0.00001 }
+      let stereo = (0..<512).allSatisfy { left[$0] == right[$0] }
+      continuation.resume(returning: prepared == 1 && result == 0 && audible && stereo && !Thread.isMainThread)
+    }
+  }
+  #expect(success)
+}
+
+@Test @MainActor func optInDeviceSmoke() async throws {
+  guard ProcessInfo.processInfo.environment["LW_DEVICE_SMOKE"] == "1" else { return }
+  let audio = LatticewakeAudio()
+  try audio.setScene(bytes: Data(DemoScene.playableJSON.utf8))
+  try audio.start()
+  defer { audio.stop() }
+  audio.play(note: 60)
+  try await Task.sleep(for: .seconds(1))
+  audio.release(note: 60)
+  try await Task.sleep(for: .milliseconds(200))
+  audio.stop()
+  #expect((audio.auditionReceipt?.callbackCount ?? 0) > 0)
+  #expect(audio.auditionReceipt?.rejectedBlocks == 0)
+  print(audio.auditionReceipt?.machineLine ?? "missing receipt")
+}
 @Test @MainActor func terrainStagePreparesImmutableSnapshot() throws {
   let model = TerrainStageModel()
   try model.prepare(sceneBytes: Data(DemoScene.canonicalJSON.utf8), sampleOffset: 480)

@@ -10,14 +10,18 @@ BRIDGE_SOURCES = app/Bridge/LatticewakeBridge.cpp tests/bridge_tests.cpp
 
 .PHONY: test clean
 
-test: $(TEST_BIN) $(BRIDGE_TEST_BIN)
+test: $(TEST_BIN) $(BRIDGE_TEST_BIN) $(BUILD_DIR)/playable_tests
 	$(TEST_BIN)
 	$(BRIDGE_TEST_BIN)
+	$(BUILD_DIR)/playable_tests
+
+$(BUILD_DIR)/playable_tests: $(CORE_SOURCES) tests/playable_tests.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CORE_SOURCES) tests/playable_tests.cpp -o $@
 
 $(TEST_BIN): $(CORE_SOURCES) $(TEST_SOURCES) | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) $(CORE_SOURCES) $(TEST_SOURCES) -o $(TEST_BIN)
 
-$(BRIDGE_TEST_BIN): $(BRIDGE_SOURCES) src/realtime_event_queue.hpp | $(BUILD_DIR)
+$(BRIDGE_TEST_BIN): $(BRIDGE_SOURCES) $(CORE_SOURCES) $(wildcard src/*.hpp) app/Bridge/include/LatticewakeBridge.h | $(BUILD_DIR)
 	$(CXX) $(CXXFLAGS) $(INCLUDES) -Iapp/Bridge/include $(BRIDGE_SOURCES) -o $(BRIDGE_TEST_BIN)
 
 $(BUILD_DIR):
