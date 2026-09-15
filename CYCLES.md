@@ -299,3 +299,15 @@ byte-preserved legacy files, and equivalent migrated render fixtures.
   hardware MPE, MIDI output, human listening, or aesthetic evaluation.
 - Retained work: exact callback-admission instrumentation and target-device
   gesture/MPE review remain open before a real-time admission decision.
+
+### Cycle 035 correction — Core MIDI executor isolation
+
+- Scope: moved Core MIDI packet decoding behind a sendable dispatcher. The
+  Core MIDI delivery block no longer captures main-actor application state;
+  decoded messages explicitly hop to the main actor before entering the input
+  multiplexer.
+- Evidence: a Swift regression fixture invokes the dispatcher from a
+  background queue and verifies main-actor receipt. See
+  `handoffs/cycle-035-midi-isolation-correction.md`.
+- Non-goal: this correction does not establish endpoint/hardware MPE behavior
+  or callback admission.

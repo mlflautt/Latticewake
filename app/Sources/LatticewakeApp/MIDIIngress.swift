@@ -19,6 +19,35 @@ struct MIDIMessage: Sendable, Equatable {
   let data2: UInt8
 }
 
+// Core MIDI invokes an input-port block on its own thread. This object is the
+// nonisolated boundary: it owns no UI or MIDI state and only forwards copied,
+// Sendable messages to an explicit main-actor hop.
+final class MIDIReceiveDispatcher: @unchecked Sendable {
+  private let submitOnMainActor: @Sendable ([MIDIMessage]) -> Void
+
+  init(submitOnMainActor: @escaping @Sendable ([MIDIMessage]) -> Void) {
+    self.submitOnMainActor = submitOnMainActor
+  }
+
+  nonisolated func submit(_ messages: [MIDIMessage]) {
+    submitOnMainActor(messages)
+  }
+}
+
+// MIDI client notifications use the same Core MIDI threading contract as input
+// packets. Keep their callback free of actor-isolated state as well.
+final class MIDIRefreshDispatcher: @unchecked Sendable {
+  private let refreshOnMainActor: @Sendable () -> Void
+
+  init(refreshOnMainActor: @escaping @Sendable () -> Void) {
+    self.refreshOnMainActor = refreshOnMainActor
+  }
+
+  nonisolated func refresh() {
+    refreshOnMainActor()
+  }
+}
+
 enum MIDIMessageDecoder {
   static func decode(_ bytes: [UInt8]) -> [MIDIMessage] {
     var messages: [MIDIMessage] = []
@@ -60,6 +89,8 @@ enum MIDIMessageDecoder {
   private var port = MIDIPortRef()
   private var mpe: OpaquePointer?
   private var connectedSources = Set<MIDIEndpointRef>()
+  private var receiveDispatcher: MIDIReceiveDispatcher?
+  private var refreshDispatcher: MIDIRefreshDispatcher?
   private var sustain = Set<Int>()
   private var deferredReleases: [(channel: Int, note: Int)] = []
 
@@ -71,6 +102,8 @@ enum MIDIMessageDecoder {
     if client != 0 { MIDIClientDispose(client) }
     client = 0
     connectedSources.removeAll()
+    receiveDispatcher = nil
+    refreshDispatcher = nil
     sourceCount = 0
   }
 
@@ -78,13 +111,30 @@ enum MIDIMessageDecoder {
     guard client == 0 else { return }
     self.input = input
     configure(mode: .legacy)
-    guard MIDIClientCreateWithBlock("Latticewake MIDI" as CFString, &client, { [weak self] _ in
+    let refreshDispatcher = MIDIRefreshDispatcher { [weak self] in
       Task { @MainActor [weak self] in self?.refreshSources() }
-    }) == noErr else { status = "MIDI client unavailable"; return }
-    guard MIDIInputPortCreateWithBlock(client, "Latticewake Input" as CFString, &port, { [weak self] packetList, _ in
-      let messages = Self.messages(from: packetList)
-      Task { @MainActor [weak self] in self?.receive(messages) }
-    }) == noErr else { status = "MIDI input unavailable"; return }
+    }
+    self.refreshDispatcher = refreshDispatcher
+    guard MIDIClientCreateWithBlock("Latticewake MIDI" as CFString, &client, { [refreshDispatcher] _ in
+      refreshDispatcher.refresh()
+    }) == noErr else {
+      self.refreshDispatcher = nil
+      status = "MIDI client unavailable"
+      return
+    }
+    let dispatcher = MIDIReceiveDispatcher { [weak self] messages in
+      Task { @MainActor [weak self] in
+        self?.receive(messages)
+      }
+    }
+    receiveDispatcher = dispatcher
+    guard MIDIInputPortCreateWithBlock(client, "Latticewake Input" as CFString, &port, { [dispatcher] packetList, _ in
+      dispatcher.submit(MIDIIngress.messages(from: packetList))
+    }) == noErr else {
+      receiveDispatcher = nil
+      status = "MIDI input unavailable"
+      return
+    }
     refreshSources()
   }
 

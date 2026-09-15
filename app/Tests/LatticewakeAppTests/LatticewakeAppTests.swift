@@ -88,6 +88,35 @@ final class LatticewakeAppTests: XCTestCase {
   ])
 }
 
+  func testMidiReceiveDispatcherCanHopFromBackgroundToMainActor() async {
+    let received = expectation(description: "main actor receives MIDI")
+    let dispatcher = MIDIReceiveDispatcher { messages in
+      Task { @MainActor in
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(messages, [MIDIMessage(status: 0x90, data1: 60, data2: 100)])
+        received.fulfill()
+      }
+    }
+    DispatchQueue.global().async {
+      dispatcher.submit([MIDIMessage(status: 0x90, data1: 60, data2: 100)])
+    }
+    await fulfillment(of: [received], timeout: 1)
+  }
+
+  func testMidiRefreshDispatcherCanHopFromBackgroundToMainActor() async {
+    let refreshed = expectation(description: "main actor refreshes MIDI sources")
+    let dispatcher = MIDIRefreshDispatcher {
+      Task { @MainActor in
+        XCTAssertTrue(Thread.isMainThread)
+        refreshed.fulfill()
+      }
+    }
+    DispatchQueue.global().async {
+      dispatcher.refresh()
+    }
+    await fulfillment(of: [refreshed], timeout: 1)
+  }
+
   func testPerformanceInputSourcesKeepMpeChannelsDistinct() {
     XCTAssertNotEqual(PerformanceInputSource.keyboard.token, PerformanceInputSource.pointer.token)
     XCTAssertNotEqual(PerformanceInputSource.midi(channel: 2).token, PerformanceInputSource.midi(channel: 3).token)

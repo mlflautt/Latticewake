@@ -106,3 +106,16 @@ with zero app-owned bridge budget misses or rejected blocks. It does not measure
 Core Audio internal allocations or locks, certify hardware MIDI/MPE behavior, or
 constitute callback admission. The status at the top of this document remains
 unchanged.
+
+## Cycle 035 Core MIDI isolation correction
+
+The `v0.35.0-alpha.2` target-Mac crash report identified a separate ingress
+problem: Core MIDI invoked its packet block on a MIDI worker thread while the
+block inherited main-actor isolation. `v0.35.0-alpha.3` stores a sendable packet
+dispatcher that decodes packets off-actor and explicitly schedules delivery to
+the main-actor input multiplexer. A Swift regression test calls that dispatcher
+from a background queue and verifies receipt on the main actor.
+
+This corrects MIDI ingress isolation only. It neither changes the audio callback
+route nor supplies the allocation, lock, deadline, hardware-MPE, or listening
+evidence required for callback admission.
