@@ -29,8 +29,8 @@ MPE state primitives, and a fixed-capacity terrain render candidate. The native
 SwiftUI app uses an AVAudioEngine host with a C++ terrain bridge, saved Scene
 bytes, QWERTY direct notes, and trackpad expression.
 
-The C++ bridge now has a fixed SPSC input queue and bridge-level render
-allocation test. It is still not admitted to a device callback: see the
+The C++ bridge now has a fixed SPSC input queue, two persistent prepared plan
+slots, and bridge-level render allocation tests. It is still not admitted to a device callback: see the
 [real-time admission gate](docs/REALTIME_ADMISSION.md). No target-device
 performance or human listening result is claimed.
 

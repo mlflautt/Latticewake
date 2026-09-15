@@ -117,12 +117,16 @@ heard, approved, or preferred.
 - Non-goals: complete AVAudioEngine admission, Core MIDI/MPE device I/O,
   EngineRack, Metal surface, model provider, or human listening evidence.
 
-## Next-cycle options
-
 ### Cycle 018 — immutable render-plan publication
 
-Define a prepared immutable render plan, safe publication/lifetime ownership,
-and exact bridge-path allocation/lock instrumentation.
+- Scope: prepared terrain-plan contract, two persistent bridge plan slots,
+  block-boundary adoption, and live scene publication from the Swift adapter.
+- Evidence: deterministic plan, pending-plan, generation-transition, normal,
+  sanitizer, and Swift package checks; see `handoffs/cycle-018.md`.
+- Non-goals: complete callback admission, multi-producer ingestion, Core MIDI,
+  Terrain Stage UI, EngineRack, or human listening evidence.
+
+## Next-cycle options
 
 ### Cycle 019 — Terrain Stage snapshots
 

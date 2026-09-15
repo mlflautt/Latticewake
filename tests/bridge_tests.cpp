@@ -26,6 +26,8 @@ void testBoundedQueueAndRender() {
   assert(lw_kernel_status(kernel, &before) == 1);
   assert(before.pending_events == lw_kernel_event_queue_capacity());
   assert(before.dropped_events == 1U);
+  assert(before.active_plan_generation == 1U);
+  assert(before.pending_plan_generation == 0U);
 
   std::array<float, 128> output{};
   allocations.store(0, std::memory_order_relaxed);
@@ -41,6 +43,22 @@ void testBoundedQueueAndRender() {
   assert(lw_kernel_status(kernel, &after) == 1);
   assert(after.pending_events == before.pending_events - 256U);
   assert(after.dropped_events == before.dropped_events);
+  assert(lw_kernel_prepare_demo(kernel, 48000.0) == 0);
+  assert(lw_kernel_publish_demo(kernel, 48000.0) == 1);
+  assert(lw_kernel_publish_demo(kernel, 48000.0) == 0);
+  LWKernelStatus pending{};
+  assert(lw_kernel_status(kernel, &pending) == 1);
+  assert(pending.active_plan_generation == 1U);
+  assert(pending.pending_plan_generation == 2U);
+  allocations.store(0, std::memory_order_relaxed);
+  countAllocations.store(true, std::memory_order_relaxed);
+  assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+  countAllocations.store(false, std::memory_order_relaxed);
+  assert(allocations.load(std::memory_order_relaxed) == 0U);
+  LWKernelStatus adopted{};
+  assert(lw_kernel_status(kernel, &adopted) == 1);
+  assert(adopted.active_plan_generation == 2U);
+  assert(adopted.pending_plan_generation == 0U);
   lw_kernel_destroy(kernel);
 }
 

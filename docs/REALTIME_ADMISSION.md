@@ -2,8 +2,9 @@
 
 No current Latticewake component is admitted to an audio callback. Admission is
 per component and requires evidence for the exact target build, not a claim
-based on offline tests. Cycle 017 provides a bounded, allocation-tested C++
-bridge event handoff only; it is not evidence for the entire AVAudioEngine path.
+based on offline tests. Cycles 017–018 provide bounded C++ event handoff and
+two-slot prepared-plan publication only; they are not evidence for the entire
+AVAudioEngine path.
 
 ## Required contract
 
@@ -15,7 +16,9 @@ bridge event handoff only; it is not evidence for the entire AVAudioEngine path.
   overflow and exposes a drop counter. The audio side never waits for a
   producer.
 - Publish immutable scenes and visual snapshots with explicit lifetime/epoch
-  ownership; callback-visible data cannot be freed concurrently.
+  ownership; callback-visible data cannot be freed concurrently. The current
+  two-slot plan bridge does not free either slot during playback and accepts at
+  most one pending replacement.
 - Set an explicit per-block event cap and a deterministic overload policy.
 - Keep denormal, non-finite, and reset handling local and bounded.
 

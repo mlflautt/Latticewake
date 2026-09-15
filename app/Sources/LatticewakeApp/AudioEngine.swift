@@ -4,6 +4,7 @@ import AVFoundation
 @_silgen_name("lw_kernel_destroy") private func lw_kernel_destroy(_ kernel: OpaquePointer)
 @_silgen_name("lw_kernel_prepare_demo") private func lw_kernel_prepare_demo(_ kernel: OpaquePointer, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_prepare_scene_json") private func lw_kernel_prepare_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
+@_silgen_name("lw_kernel_publish_scene_json") private func lw_kernel_publish_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_note_on") private func lw_kernel_note_on(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float) -> Int32
 @_silgen_name("lw_kernel_expression") private func lw_kernel_expression(_ kernel: OpaquePointer, _ glide: Float, _ press: Float, _ slide: Float) -> Int32
 @_silgen_name("lw_kernel_note_off") private func lw_kernel_note_off(_ kernel: OpaquePointer, _ note: Int32) -> Int32
@@ -18,6 +19,12 @@ import AVFoundation
 
   func setScene(bytes: Data) throws {
     guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
+    if running, let kernel {
+      let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
+      guard text.withCString({ lw_kernel_publish_scene_json(kernel, $0, sampleRate) }) != 0 else {
+        throw NSError(domain: "Latticewake", code: 4, userInfo: [NSLocalizedDescriptionKey: "Scene change is pending or could not be prepared"])
+      }
+    }
     sceneJSON = text
   }
 

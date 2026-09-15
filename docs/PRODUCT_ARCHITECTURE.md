@@ -40,6 +40,8 @@ context.
 An explicit prepared handoff creates immutable render state before playback.
 The render consumer receives only preallocated state and bounded events. It
 never parses a Scene, accesses files, UI, Metal, networking, or an AI provider.
+The current bridge uses two persistent prepared-plan slots and adopts a
+published replacement only at an audio-block boundary.
 
 The standalone bridge currently uses a fixed-capacity SPSC event queue between
 the SwiftUI producer and C++ render consumer. Queue overflow drops the newest
