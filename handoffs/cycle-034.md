@@ -31,10 +31,9 @@ Native technical review:
 Verification:
 
 - Signed standalone build and strict signature verification: pass.
-- Normal and sanitizer core/bridge/playable tests: pass (final exact-SHA hosted
-  status is recorded after publication).
-- Existing immutable terrain snapshot Swift fixture remains applicable; hosted
-  full-Xcode Swift verification covers the revised Swift package.
+- Normal and sanitizer core/bridge/playable tests: pass.
+- Hosted core and full-Xcode Swift verification: pass for exact SHA
+  `4f6ffabadbc792687d893763f3d5da8e944b07c3`.
 
 Open acceptance items:
 
