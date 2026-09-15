@@ -25,9 +25,14 @@ private struct BridgeCallbackStatus {
   _ kernel: OpaquePointer, _ status: UnsafeMutablePointer<BridgeCallbackStatus>
 ) -> Int32
 
+private final class CallbackRenderState: @unchecked Sendable {
+  let kernel: OpaquePointer
+  init(kernel: OpaquePointer) { self.kernel = kernel }
+}
+
 private enum CallbackRenderRoute {
-  static func render(kernel: OpaquePointer, frameCount: AVAudioFrameCount,
-                     audioBufferList: UnsafeMutablePointer<AudioBufferList>) -> OSStatus {
+  nonisolated static func render(kernel: OpaquePointer, frameCount: AVAudioFrameCount,
+                                 audioBufferList: UnsafeMutablePointer<AudioBufferList>) -> OSStatus {
     let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
     guard let firstBuffer = buffers.first, let firstData = firstBuffer.mData else { return noErr }
     let first = firstData.assumingMemoryBound(to: Float.self)
@@ -49,6 +54,12 @@ private enum CallbackRenderRoute {
       }
     }
     return noErr
+  }
+}
+
+private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) -> AVAudioSourceNode {
+  AVAudioSourceNode { @Sendable _, _, count, audioBufferList -> OSStatus in
+    CallbackRenderRoute.render(kernel: state.kernel, frameCount: count, audioBufferList: audioBufferList)
   }
 }
 
@@ -78,9 +89,7 @@ private enum CallbackRenderRoute {
     guard let created = lw_kernel_create() else { throw NSError(domain: "Latticewake", code: 1) }
     let prepared = sceneJSON.withCString { lw_kernel_prepare_scene_json(created, $0, format.sampleRate) }
     guard prepared != 0 else { lw_kernel_destroy(created); throw NSError(domain: "Latticewake", code: 2) }
-    let node = AVAudioSourceNode { _, _, count, audioBufferList -> OSStatus in
-      CallbackRenderRoute.render(kernel: created, frameCount: count, audioBufferList: audioBufferList)
-    }
+    let node = makeCallbackSourceNode(CallbackRenderState(kernel: created))
     kernel = created
     sourceNode = node
     engine.attach(node)

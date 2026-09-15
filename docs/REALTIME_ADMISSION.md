@@ -67,3 +67,11 @@ listener-owned record template are in [TARGET_MAC_AUDITION.md](TARGET_MAC_AUDITI
 No completed target-Mac session or listening observation is recorded in this
 repository. Therefore Cycle 025 provides instrumentation and protocol only;
 it does not change the admission status above.
+
+## Callback isolation correction
+
+The first target-Mac Start attempt on `v0.26.0-alpha.1` crashed because its
+source-node closure inherited `@MainActor` isolation and Core Audio invoked it
+on an I/O thread. The callback now captures only an explicitly sendable opaque
+render-state holder and calls a `nonisolated` render helper. It must be
+recompiled and retested on the target route before any admission claim.

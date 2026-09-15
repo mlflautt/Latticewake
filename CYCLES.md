@@ -200,9 +200,19 @@ heard, approved, or preferred.
 - Non-goals: target-device callback receipt, hardware MIDI, listener
   observation, callback admission, or release notarization.
 
+### Cycle 027 — callback isolation correction
+
+- Scope: remove inherited `@MainActor` isolation from the AVAudioSourceNode
+  render closure after the first target-Mac Start crash.
+- Evidence: the callback captures only an explicitly sendable opaque render
+  holder, dispatches to a `nonisolated` renderer, and normal/sanitizer/Swift
+  checks pass; see `handoffs/cycle-027.md`.
+- Non-goals: a replacement target-Mac callback result, listener observation,
+  callback admission, or any creative assessment.
+
 ## Next-cycle options
 
-### Cycle 027 — recorded target-device audition
+### Cycle 028 — recorded target-device audition
 
 Run the protocol on the target Mac, preserve the returned technical receipt and
 human observation separately, then make an explicit admission decision.
