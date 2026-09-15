@@ -38,9 +38,10 @@ It is still not admitted to a device callback: see the
 human listening result is claimed. A Cycle 032 target-device smoke run is
 recorded as technical evidence only.
 
-The native Terrain Stage now renders a 256-point immutable C++ terrain trace in
-a SwiftUI 2D Canvas. It is an initial scene visualization, not a Metal field,
-3D view, live transport display, or creative evaluation.
+The native Terrain Stage now renders the immutable C++ terrain trace through a
+Metal-backed 2D surface, with a separate contour overlay and explicit direct
+voice/lane activity. It is an authoritative 2D performance surface, not a 3D
+view or creative evaluation.
 
 Core MIDI sources are now discovered by the standalone app with Legacy, MPE
 Lower, and MPE Upper ingress modes. This is tested packet/ownership routing;

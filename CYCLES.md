@@ -272,3 +272,17 @@ byte-preserved legacy files, and equivalent migrated render fixtures.
   and hosted Swift fixtures. See `handoffs/cycle-033.md`.
 - Retained work: component editors, media analysis, modulation execution, and
   expanded named lanes begin in Cycles 036–040. Cycle 034 is the next target.
+
+### Cycle 034 — luminous Terrain Stage shell
+
+- Scope: replaced the temporary Canvas waveform view with a Metal-backed
+  immutable-terrain surface, visible direct/lane activity, a four-role deck,
+  scene/output status hierarchy, and contextual Library/Inspector drawers.
+- Runtime boundary: Metal consumes only `TerrainStageSnapshot`; its UI-owned
+  vertex upload and contour overlay cannot read or stall callback state.
+- Evidence: signed app build, native Stage review, responsive scroll behavior,
+  and live Four Role Loop review showing four active lanes plus a nonzero output
+  meter. See `handoffs/cycle-034.md`.
+- Retained work: live terrain playhead animation, richer contour field density,
+  full parameter editors, and a reduced-motion automation fixture remain open.
+  Cycle 035 input/MPE admission is next.

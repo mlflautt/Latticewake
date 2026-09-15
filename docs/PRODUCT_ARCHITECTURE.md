@@ -7,12 +7,11 @@ third-party plug-ins.
 
 ## Artist-facing workspaces
 
-**Terrain Stage** is the default: an authoritative 2D terrain surface, direct
-play, role strip, engine macros, and runtime status. The current SwiftUI Canvas
-trace is a prototype sourced from immutable C++ terrain-frame snapshots. The
-next visual milestone replaces it with an authoritative Metal 2D contour
-surface; 3D remains an optional secondary view. The Stage stays visible while
-contextual drawers provide depth.
+**Terrain Stage** is the default: an authoritative Metal-backed 2D terrain
+surface, direct play, role strip, engine macros, and runtime status. It renders
+only immutable C++ terrain-frame snapshots; its Canvas contour overlay is visual
+annotation, never audio state. 3D remains an optional secondary view. The Stage
+stays playable while Library and Inspector drawers provide contextual depth.
 
 **Scene**, **Generator**, and **Library** are progressive workspaces over the
 same canonical scene model. Scene edits terrain, harmony, roles, paths, and

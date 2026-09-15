@@ -23,10 +23,27 @@ struct ContentView: View {
   @State private var performance = PerformanceSettingsV1()
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
+  @State private var libraryOpen = false
+  @State private var inspectorOpen = false
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   var body: some View {
-    VStack(spacing: 14) {
-      Text("Latticewake").font(.largeTitle)
+    ScrollView {
+      VStack(spacing: 14) {
+      HStack(alignment: .firstTextBaseline) {
+        VStack(alignment: .leading, spacing: 2) {
+          Text("Latticewake").font(.title.bold())
+          Text("TERRAIN STAGE").font(.caption2.monospaced()).foregroundStyle(.cyan)
+        }
+        Spacer()
+        VStack(alignment: .trailing, spacing: 2) {
+          Text(audio.running ? "AUDITION" : "READY").font(.caption.monospaced()).foregroundStyle(audio.running ? .mint : .secondary)
+          Text("OUT \(Int(audio.outputPeak * 100))%").font(.caption2.monospaced()).foregroundStyle(.secondary)
+        }
+        Button("Panic") { midi.panic() }.buttonStyle(.bordered)
+      }
       HStack {
+        Button("Library") { libraryOpen.toggle() }.buttonStyle(.bordered)
+        Button("Inspect") { inspectorOpen.toggle() }.buttonStyle(.bordered)
         Menu("Starter Scenes") {
           Button("Sustained Terrain") { selectStarter(DemoScene.sustainedJSON, label: "Sustained Terrain") }
           Button("Gesture Terrain") { selectStarter(DemoScene.gestureJSON, label: "Gesture Terrain") }
@@ -45,9 +62,9 @@ struct ContentView: View {
         Text("This path produces no sustained tone.").foregroundStyle(.orange)
       }
       HStack {
-        Text("Terrain Stage").font(.headline)
+        Text("Play the terrain").font(.headline)
         Spacer()
-        Text(audio.running ? "Audition running" : "Ready").foregroundStyle(.secondary)
+        Text(audio.running ? "Audition running" : "Start to play").foregroundStyle(.secondary)
       }
       if !roles.isEmpty {
         RoleControlsView(controls: $roles, apply: applyRoleChanges)
@@ -58,11 +75,8 @@ struct ContentView: View {
       Text("Sampling path").font(.caption)
       ProgressView("Output", value: audio.outputPeak, total: 1).frame(maxWidth: 300)
       GeometryReader { geometry in
-        TerrainStageView(snapshot: terrain.snapshot)
-          .overlay(alignment: .topLeading) {
-            if let pointer { Circle().stroke(.orange, lineWidth: 3).frame(width: 18,height: 18).position(pointer) }
-          }
-          .clipShape(RoundedRectangle(cornerRadius: 12))
+        TerrainContourSurface(snapshot: terrain.snapshot, pointer: pointer,
+                              heldNotes: keyboard.held.sorted(), activeLanes: audio.activeRoleLanes)
           .contentShape(Rectangle())
           .gesture(DragGesture(minimumDistance: 0).onChanged { value in
             guard audio.running else { return }
@@ -75,8 +89,28 @@ struct ContentView: View {
               else { audio.keyboardExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
             }
           }.onEnded { _ in endGesture() })
-      }.frame(height: 280)
+      }.frame(height: 320)
       Text("Held notes: \(keyboard.held.sorted().map(String.init).joined(separator: ", "))\(gesture.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
+      StageRoleDeck(roles: roles, activeLanes: audio.activeRoleLanes, running: audio.rolesRunning)
+      if libraryOpen || inspectorOpen {
+        HStack(alignment: .top, spacing: 12) {
+          if libraryOpen {
+            StageDrawer(title: "Library", color: .cyan) {
+              Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
+              Button("Close Library") { libraryOpen = false }.font(.caption)
+              Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
+            }
+          }
+          if inspectorOpen {
+            StageDrawer(title: "Inspector", color: .purple) {
+              Text("Surface · Traversal · Articulation").font(.caption)
+              Text("Scene v1 components are prepared before audio. Editors arrive in Cycle 036.").font(.caption).foregroundStyle(.secondary)
+              Text(reduceMotion ? "Reduced motion active" : "Live snapshot display").font(.caption2).foregroundStyle(.secondary)
+              Button("Close Inspector") { inspectorOpen = false }.font(.caption)
+            }
+          }
+        }
+      }
       DisclosureGroup("Diagnostics") {
       if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
       if roleTrace.eventCount > 0 {
@@ -94,7 +128,6 @@ struct ContentView: View {
           else { audio.startRoles(); performance.roleTransportEnabled = true }
           isDirty = true
         }
-        Button("Panic") { midi.panic() }
       }
       HStack {
         Picker("MIDI", selection: Binding(get: { midi.mode }, set: { midi.configure(mode: $0) })) {
@@ -105,7 +138,11 @@ struct ContentView: View {
       Text("Play: A W S E D F T G Y H U J K").font(.caption)
       Text(String(cString: latticewake_core_version())).font(.caption2).foregroundStyle(.secondary)
       if !error.isEmpty { Text(error).foregroundStyle(.red) }
-    }.frame(minWidth: 520, minHeight: 520).padding().focusable().task {
+      }
+      .frame(maxWidth: .infinity)
+      .padding()
+    }
+    .frame(minWidth: 620, minHeight: 620).focusable().task {
       do {
         try installScene(Data(DemoScene.gestureJSON.utf8), url: nil, recordUndo: false, dirty: false)
       } catch { self.error = error.localizedDescription }
