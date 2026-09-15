@@ -6,11 +6,12 @@ human listening result from counters.
 
 ## Before starting
 
-Build and launch the standalone app on the intended Apple-Silicon Mac:
+Build and launch the standalone `.app` bundle on the intended Apple-Silicon Mac:
 
 ```bash
 cd "/Users/m1/Music Lab/Latticewake/app"
-swift run LatticewakeApp
+bash scripts/build_macos_app.sh
+open ../build/Latticewake.app
 ```
 
 Record the app version/tag, Mac model, macOS version, selected audio output,

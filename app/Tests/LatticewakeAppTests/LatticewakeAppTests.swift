@@ -32,3 +32,12 @@ import Foundation
   #expect(first == repeated)
   #expect(first.eventCount > 0)
 }
+
+@Test func auditionReceiptIsStructuredAndStable() {
+  let receipt = AuditionReceipt(sampleRate: 48_000, callbackCount: 12,
+                                renderedFrames: 6_144, maximumRenderNanoseconds: 123_000,
+                                deadlineMisses: 0, rejectedBlocks: 0)
+  #expect(receipt.machineLine == "LW_AUDITION_RECEIPT sample_rate=48000.0 callbacks=12 frames=6144 max_render_ns=123000 deadline_misses=0 rejected_blocks=0")
+  #expect(receipt.statusText.contains("48000 Hz"))
+  #expect(receipt.fileContents.hasSuffix("\n"))
+}

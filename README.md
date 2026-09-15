@@ -62,6 +62,12 @@ For a real standalone audition, follow the
 [target-Mac protocol](docs/TARGET_MAC_AUDITION.md). Its technical receipt and
 listener observation are intentionally separate evidence.
 
+Build a local debug `.app` bundle with:
+
+```bash
+cd app && bash scripts/build_macos_app.sh
+```
+
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see

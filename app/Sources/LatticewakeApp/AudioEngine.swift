@@ -55,6 +55,7 @@ private enum CallbackRenderRoute {
 @MainActor final class LatticewakeAudio: ObservableObject {
   @Published private(set) var running = false
   @Published private(set) var callbackStatus = "No callback blocks rendered."
+  @Published private(set) var auditionReceipt: AuditionReceipt?
   private let engine = AVAudioEngine()
   private var kernel: OpaquePointer?
   private var sourceNode: AVAudioSourceNode?
@@ -95,6 +96,7 @@ private enum CallbackRenderRoute {
       throw error
     }
     running = true
+    auditionReceipt = nil
     callbackStatus = "Callback preflight active (maximum 4096 frames)."
   }
   func stop() {
@@ -107,7 +109,14 @@ private enum CallbackRenderRoute {
     if let kernel {
       var status = BridgeCallbackStatus()
       if lw_kernel_callback_status(kernel, &status) != 0 {
-        callbackStatus = "Audition receipt: \(status.callbackCount) blocks, \(status.renderedFrames) frames, max \(status.maximumRenderNanoseconds / 1_000) µs, \(status.deadlineMisses) bridge budget misses, \(status.renderFailures) rejected."
+        let receipt = AuditionReceipt(sampleRate: engine.mainMixerNode.outputFormat(forBus: 0).sampleRate,
+                                      callbackCount: status.callbackCount,
+                                      renderedFrames: status.renderedFrames,
+                                      maximumRenderNanoseconds: status.maximumRenderNanoseconds,
+                                      deadlineMisses: status.deadlineMisses,
+                                      rejectedBlocks: status.renderFailures)
+        auditionReceipt = receipt
+        callbackStatus = receipt.statusText
       }
       lw_kernel_destroy(kernel)
     }

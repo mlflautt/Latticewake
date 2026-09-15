@@ -190,9 +190,19 @@ heard, approved, or preferred.
 - Non-goals: a completed target-device run, Core Audio internal tracing,
   listener verdict, callback admission, or any automatic quality decision.
 
+### Cycle 026 — standalone app packaging
+
+- Scope: repeatable Apple-Silicon debug `.app` bundle assembly, local ad-hoc
+  signing, and a stable bundle identity for the standalone audition target.
+- Evidence: `app/scripts/build_macos_app.sh` builds, packages, and signs the
+  app; normal, sanitizer, and Swift package checks pass. See
+  `handoffs/cycle-026.md`.
+- Non-goals: target-device callback receipt, hardware MIDI, listener
+  observation, callback admission, or release notarization.
+
 ## Next-cycle options
 
-### Cycle 026 — recorded target-device audition
+### Cycle 027 — recorded target-device audition
 
 Run the protocol on the target Mac, preserve the returned technical receipt and
 human observation separately, then make an explicit admission decision.
