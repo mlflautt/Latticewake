@@ -135,9 +135,23 @@ heard, approved, or preferred.
 - Non-goals: Metal or 3D rendering, live transport display, callback admission,
   MIDI, role controls, or human visual/auditory review.
 
+### Cycle 020 — Core MIDI and MPE ingress
+
+- Scope: Core MIDI source lifecycle, one main-actor ingress producer, portable
+  legacy/lower/upper MPE state, and inbound note/expression routing.
+- Evidence: bridge MPE ownership/reset fixtures, normal/sanitizer checks, and
+  Swift MIDI packet decoding; see `handoffs/cycle-020.md`.
+- Non-goals: hardware session, MIDI output, independent per-note MPE DSP,
+  callback admission, or human listening evidence.
+
 ## Next-cycle options
 
-### Cycle 020 — Core MIDI and MPE input
+### Cycle 021 — per-note MPE kernel expression
 
-Add endpoint lifecycle and a designated input multiplexer around the tested
-legacy/lower/upper MPE state model.
+Carry note identity through bounded expression events, retain per-note values
+inside fixed voice slots, and prove independent voice expression fixtures.
+
+### Cycle 022 — four-role performance controls
+
+Expose initial role enable/density/range/pattern/seed controls, deterministic
+offline replay, and visible trace status without callback UI reads.

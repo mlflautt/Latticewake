@@ -46,3 +46,11 @@ scene replacement.
 - Exhaustion applies the declared voice-steal policy and leaves no stuck note.
 - Stop, panic, and scene replacement reclaim every outbound member channel.
 - Sample-time trace reproduces note and expression event order.
+
+## Current implementation status
+
+Cycle 020 implements Core MIDI ingress, source lifecycle, and validated
+legacy/lower/upper channel ownership through the portable bridge. It also
+decodes pitch bend, channel pressure, CC74, and sustain. The current terrain
+kernel still applies accepted expression as global voice state; independent
+per-note rendering remains a required later kernel change.

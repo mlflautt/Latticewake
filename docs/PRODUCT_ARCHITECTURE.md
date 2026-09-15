@@ -54,6 +54,11 @@ render-call tests with zero observed C++ allocations, but the full AVAudioEngine
 exact-path instrumentation, overload stress, and target-device evidence before
 callback admission.
 
+Core MIDI ingress is marshalled onto that same Swift main-actor producer and
+uses a portable legacy/lower/upper MPE ownership state. Current terrain voices
+do not yet render expression independently per note; MPE ingress and MPE DSP
+admission remain separate milestones.
+
 ## Generative and agent boundary
 
 Generators and AI providers create typed, bounded preview proposals such as

@@ -38,6 +38,11 @@ The native Terrain Stage now renders a 256-point immutable C++ terrain trace in
 a SwiftUI 2D Canvas. It is an initial scene visualization, not a Metal field,
 3D view, live transport display, or creative evaluation.
 
+Core MIDI sources are now discovered by the standalone app with Legacy, MPE
+Lower, and MPE Upper ingress modes. This is tested packet/ownership routing;
+it has not received a hardware session, MIDI output support, or per-note MPE
+voice-rendering proof.
+
 The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see

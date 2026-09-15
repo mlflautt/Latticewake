@@ -74,4 +74,8 @@ import AVFoundation
   func play(note: Int) { if let kernel { _ = lw_kernel_note_on(kernel, Int32(note), 0.7) } }
   func release(note: Int) { if let kernel { _ = lw_kernel_note_off(kernel, Int32(note)) } }
   func expression(glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_expression(kernel, Float(glide), Float(press), Float(slide)) } }
+  func midiPlay(note: Int, velocity: Double) -> Bool { guard let kernel else { return false }; return lw_kernel_note_on(kernel, Int32(note), Float(velocity)) != 0 }
+  func midiRelease(note: Int) -> Bool { guard let kernel else { return false }; return lw_kernel_note_off(kernel, Int32(note)) != 0 }
+  func midiExpression(glide: Double, press: Double, slide: Double) { expression(glide: glide, press: press, slide: slide) }
+  func midiPanic() { stop() }
 }

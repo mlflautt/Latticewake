@@ -12,6 +12,7 @@ class MpeState {
   explicit MpeState(MpeConfig config) : config_(config) {}
   bool noteOn(int channel, int note); bool noteOff(int channel, int note);
   bool expression(int channel, MpeExpression value);
+  void reset() noexcept;
   [[nodiscard]] std::optional<MpeNoteState> active(int channel) const;
  private: bool member(int channel) const; MpeConfig config_; std::vector<MpeNoteState> notes_;
 }; }

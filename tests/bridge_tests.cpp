@@ -99,6 +99,18 @@ void testTerrainFrameSnapshotBoundary() {
                                      first.data(), 0, &firstCount) == 0);
 }
 
+void testMpeBridgeState() {
+  LWMpeStateRef* const lower = lw_mpe_state_create(1, 1, 2);
+  assert(lower != nullptr);
+  assert(lw_mpe_note_on(lower, 1, 60) == 0);
+  assert(lw_mpe_note_on(lower, 2, 60) == 1);
+  assert(lw_mpe_expression(lower, 2, 0.25F, 0.5F, 0.75F) == 1);
+  assert(lw_mpe_note_off(lower, 2, 60) == 1);
+  lw_mpe_reset(lower);
+  lw_mpe_state_destroy(lower);
+  assert(lw_mpe_state_create(3, 1, 1) == nullptr);
+}
+
 }  // namespace
 
 void* operator new(const std::size_t size) {
@@ -123,5 +135,6 @@ int main() {
   testBoundedQueueAndRender();
   testQueueResetAndInvalidStatus();
   testTerrainFrameSnapshotBoundary();
+  testMpeBridgeState();
   return 0;
 }

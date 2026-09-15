@@ -10,6 +10,7 @@
 #include "../../../src/realtime_kernel.cpp"
 #include "../../../src/realtime_event_queue.hpp"
 #include "../../../src/terrain_frame.cpp"
+#include "../../../src/mpe_state.cpp"
 
 namespace {
 constexpr std::uint32_t kNoPlan = 2;
@@ -26,6 +27,11 @@ struct LWKernelRef {
   alignas(64) std::atomic<std::uint32_t> pendingPlan{kNoPlan};
   std::atomic<std::uint64_t> nextGeneration{1};
   std::atomic<bool> renderBegun{false};
+};
+
+struct LWMpeStateRef {
+  explicit LWMpeStateRef(const latticewake::MpeConfig config) : state(config) {}
+  latticewake::MpeState state;
 };
 
 static latticewake::Scene demoScene() {
@@ -105,3 +111,12 @@ int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
 }
 unsigned int lw_kernel_event_queue_capacity(void) { return latticewake::RealtimeEventQueue::kUsableCapacity; }
 void lw_kernel_reset(LWKernelRef* k) { if(k){const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);k->plans[active].kernel.reset();k->events.resetProducerSide();} }
+LWMpeStateRef* lw_mpe_state_create(const unsigned int mode,const int masterChannel,const int memberCount) {
+  if(mode>2U||masterChannel<1||masterChannel>16||memberCount<1||memberCount>15)return nullptr;
+  return new(std::nothrow) LWMpeStateRef({static_cast<latticewake::MpeMode>(mode),masterChannel,memberCount});
+}
+void lw_mpe_state_destroy(LWMpeStateRef* state) { delete state; }
+int lw_mpe_note_on(LWMpeStateRef* state,const int channel,const int note) { return state&&state->state.noteOn(channel,note)?1:0; }
+int lw_mpe_note_off(LWMpeStateRef* state,const int channel,const int note) { return state&&state->state.noteOff(channel,note)?1:0; }
+int lw_mpe_expression(LWMpeStateRef* state,const int channel,const float glide,const float press,const float slide) { return state&&state->state.expression(channel,{glide,press,slide})?1:0; }
+void lw_mpe_reset(LWMpeStateRef* state) { if(state)state->state.reset(); }

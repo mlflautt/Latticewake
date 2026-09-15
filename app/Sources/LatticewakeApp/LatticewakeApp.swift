@@ -8,6 +8,7 @@ import LatticewakeBridge
 struct ContentView: View {
   @StateObject private var audio = LatticewakeAudio()
   @StateObject private var terrain = TerrainStageModel()
+  @StateObject private var midi = MIDIIngress()
   @State private var error = ""
   @State private var receipt = ""
   var body: some View {
@@ -29,7 +30,13 @@ struct ContentView: View {
       if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
       Text("256 immutable trace points • sample \(terrain.snapshot.sampleOffset)").font(.caption).foregroundStyle(.secondary)
       Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
-      HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { audio.stop() } }
+      HStack { Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }; Button("Panic") { midi.panic() } }
+      HStack {
+        Picker("MIDI", selection: Binding(get: { midi.mode }, set: { midi.configure(mode: $0) })) {
+          ForEach(LatticewakeMpeMode.allCases) { Text($0.rawValue).tag($0) }
+        }.labelsHidden().frame(width: 140)
+        Text("\(midi.status) • \(midi.sourceCount) source").font(.caption).foregroundStyle(.secondary)
+      }
       Text("Play: A W S E D F T G Y H U J K").font(.caption)
       Text(String(cString: latticewake_core_version())).font(.caption2).foregroundStyle(.secondary)
       if !error.isEmpty { Text(error).foregroundStyle(.red) }
@@ -44,11 +51,12 @@ struct ContentView: View {
         try terrain.prepare(sceneBytes: bytes)
         receipt = String(loaded.sha256.prefix(12))
       } catch { self.error = error.localizedDescription }
+      midi.start(audio: audio)
     }.onKeyPress { press in
       let map = ["a":60,"w":61,"s":62,"e":63,"d":64,"f":65,"t":66,"g":67,"y":68,"h":69,"u":70,"j":71,"k":72]
       guard let note = map[press.characters] else { return .ignored }
       if press.phase == .down { audio.play(note: note) } else { audio.release(note: note) }
       return .handled
-    }.onDisappear { audio.stop() }
+    }.onDisappear { midi.stop(); audio.stop() }
   }
 }
