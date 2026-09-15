@@ -90,3 +90,19 @@ This closes the replacement-start smoke check only. Native trackpad gesture
 feel, hardware MPE, human listening, and exact callback allocation/lock evidence
 remain open. Consequently the admission status at the top of this document is
 unchanged.
+
+## Cycle 035 input boundary evidence
+
+Cycle 035 makes the main-actor `PerformanceInputMultiplexer` the sole direct
+performance producer for the bridge queue. It assigns distinct source tokens to
+keyboard, pointer, and every MIDI/MPE channel, and its Swift fixture confirms
+same-pitch MPE voices retain distinct identities. The bridge panic path is now
+requested atomically by the producer and consumed by the callback, which resets
+its active kernel and discards pending events at that block boundary.
+
+Normal, sanitizer, Swift, and an opt-in local 48 kHz device smoke fixture pass
+for the release revision. The smoke measured 117 callbacks and 55,037 frames
+with zero app-owned bridge budget misses or rejected blocks. It does not measure
+Core Audio internal allocations or locks, certify hardware MIDI/MPE behavior, or
+constitute callback admission. The status at the top of this document remains
+unchanged.

@@ -51,6 +51,7 @@ struct LWKernelRef {
   alignas(64) std::atomic<std::uint32_t> pendingPlan{kNoPlan};
   std::atomic<std::uint64_t> nextGeneration{1};
   std::atomic<bool> renderBegun{false};
+  alignas(64) std::atomic<bool> panicRequested{false};
   alignas(64) std::atomic<std::uint64_t> callbackCount{0};
   std::atomic<std::uint64_t> renderedFrames{0};
   std::atomic<std::uint64_t> renderFailures{0};
@@ -188,6 +189,11 @@ int lw_kernel_note_off(LWKernelRef* k,int n) { return lw_kernel_note_off_source(
 int lw_kernel_expression(LWKernelRef* k,float glide,float press,float slide) { return k&&k->events.tryPush({0,false,-1,0,glide,press,slide,true}) ? 1 : 0; }
 int lw_kernel_note_expression(LWKernelRef* k,int note,float glide,float press,float slide) { return k&&note>=0&&note<=127&&k->events.tryPush({0,false,note,0,glide,press,slide,true}) ? 1 : 0; }
 int lw_kernel_note_expression_source(LWKernelRef* k,int note,float glide,float press,float slide,unsigned int source) { return k&&note>=0&&note<=127&&k->events.tryPush({0,false,note,0,glide,press,slide,true,source}) ? 1 : 0; }
+int lw_kernel_panic(LWKernelRef* k) {
+  if(!k) return 0;
+  k->panicRequested.store(true,std::memory_order_release);
+  return 1;
+}
 void lw_kernel_set_roles_running(LWKernelRef* k,unsigned int running) {
   if(!k) return;
   if(running!=0U) { k->rolesRunning.store(true,std::memory_order_release); k->roleStartRequested.store(true,std::memory_order_release); }
@@ -204,6 +210,16 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   if(frames==0||frames>kMaximumCallbackFrames) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
   const auto started=std::chrono::steady_clock::now();
   k->renderBegun.store(true,std::memory_order_release);
+  if(k->panicRequested.exchange(false,std::memory_order_acq_rel)) {
+    const auto active=k->activePlan.load(std::memory_order_acquire);
+    k->plans[active].kernel.reset();
+    k->events.discardPendingConsumerSide();
+    k->rolesRunning.store(false,std::memory_order_release);
+    k->roleStartRequested.store(false,std::memory_order_release);
+    k->roleStopRequested.store(false,std::memory_order_release);
+    k->activeRoleNotes={{-1,-1,-1,-1}};
+    k->activeRoleLanes.store(0,std::memory_order_release);
+  }
   const std::uint32_t pending=k->pendingPlan.load(std::memory_order_acquire);
   if(pending!=kNoPlan) {
     k->activePlan.store(pending,std::memory_order_release);
@@ -280,7 +296,18 @@ int lw_kernel_callback_status(const LWKernelRef* k,LWCallbackStatus* status) {
 }
 unsigned int lw_kernel_maximum_callback_frames(void) { return kMaximumCallbackFrames; }
 unsigned int lw_kernel_event_queue_capacity(void) { return latticewake::RealtimeEventQueue::kUsableCapacity; }
-void lw_kernel_reset(LWKernelRef* k) { if(k){const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);k->plans[active].kernel.reset();k->events.resetProducerSide();k->rolesRunning.store(false,std::memory_order_release);k->roleStartRequested.store(false,std::memory_order_release);k->roleStopRequested.store(false,std::memory_order_release);k->activeRoleNotes={{-1,-1,-1,-1}};k->activeRoleLanes.store(0,std::memory_order_release);} }
+void lw_kernel_reset(LWKernelRef* k) {
+  if(!k) return;
+  if(k->renderBegun.load(std::memory_order_acquire)) { (void)lw_kernel_panic(k); return; }
+  const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);
+  k->plans[active].kernel.reset();
+  k->events.resetProducerSide();
+  k->rolesRunning.store(false,std::memory_order_release);
+  k->roleStartRequested.store(false,std::memory_order_release);
+  k->roleStopRequested.store(false,std::memory_order_release);
+  k->activeRoleNotes={{-1,-1,-1,-1}};
+  k->activeRoleLanes.store(0,std::memory_order_release);
+}
 LWMpeStateRef* lw_mpe_state_create(const unsigned int mode,const int masterChannel,const int memberCount) {
   if(mode>2U||masterChannel<1||masterChannel>16||memberCount<1||memberCount>15)return nullptr;
   return new(std::nothrow) LWMpeStateRef({static_cast<latticewake::MpeMode>(mode),masterChannel,memberCount});

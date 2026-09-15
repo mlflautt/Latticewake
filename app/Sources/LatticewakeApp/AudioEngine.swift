@@ -14,6 +14,7 @@ import LatticewakeBridge
 @_silgen_name("lw_kernel_note_expression_source") private func lw_kernel_note_expression_source(_ kernel: OpaquePointer, _ note: Int32, _ glide: Float, _ press: Float, _ slide: Float, _ source: UInt32) -> Int32
 @_silgen_name("lw_kernel_note_off") private func lw_kernel_note_off(_ kernel: OpaquePointer, _ note: Int32) -> Int32
 @_silgen_name("lw_kernel_note_off_source") private func lw_kernel_note_off_source(_ kernel: OpaquePointer, _ note: Int32, _ source: UInt32) -> Int32
+@_silgen_name("lw_kernel_panic") private func lw_kernel_panic(_ kernel: OpaquePointer) -> Int32
 @_silgen_name("lw_kernel_set_roles_running") private func lw_kernel_set_roles_running(_ kernel: OpaquePointer, _ running: UInt32)
 @_silgen_name("lw_kernel_render") private func lw_kernel_render(_ kernel: OpaquePointer, _ output: UnsafeMutablePointer<Float>, _ frames: UInt32) -> Int32
 
@@ -166,17 +167,25 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
     rolesRunning = false
     activeRoleLanes = 0
   }
-  func play(note: Int) { if let kernel { _ = lw_kernel_note_on(kernel, Int32(note), 0.7) } }
-  func release(note: Int) { if let kernel { _ = lw_kernel_note_off(kernel, Int32(note)) } }
-  func pointerPlay(note: Int) { if let kernel { _ = lw_kernel_note_on_source(kernel, Int32(note), 0.7, 3) } }
-  func pointerRelease(note: Int) { if let kernel { _ = lw_kernel_note_off_source(kernel, Int32(note), 3) } }
-  func pointerExpression(note: Int, glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_note_expression_source(kernel, Int32(note), Float(glide), Float(press), Float(slide), 3) } }
-  func keyboardExpression(note: Int, glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_note_expression_source(kernel, Int32(note), Float(glide), Float(press), Float(slide), 1) } }
+  func enqueueNoteOn(note: Int, velocity: Double, source: UInt32) -> Bool {
+    guard let kernel else { return false }
+    return lw_kernel_note_on_source(kernel, Int32(note), Float(velocity), source) != 0
+  }
+  func enqueueNoteOff(note: Int, source: UInt32) -> Bool {
+    guard let kernel else { return false }
+    return lw_kernel_note_off_source(kernel, Int32(note), source) != 0
+  }
+  func enqueueExpression(note: Int, source: UInt32, glide: Double, press: Double, slide: Double) -> Bool {
+    guard let kernel else { return false }
+    return lw_kernel_note_expression_source(kernel, Int32(note), Float(glide), Float(press), Float(slide), source) != 0
+  }
+  func panic() -> Bool {
+    guard let kernel else { return false }
+    let accepted = lw_kernel_panic(kernel) != 0
+    if accepted { rolesRunning = false; activeRoleLanes = 0 }
+    return accepted
+  }
   func startRoles() { if let kernel { lw_kernel_set_roles_running(kernel, 1); rolesRunning = true } }
   func stopRoles() { if let kernel { lw_kernel_set_roles_running(kernel, 0); rolesRunning = false } }
   func expression(glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_expression(kernel, Float(glide), Float(press), Float(slide)) } }
-  func midiPlay(note: Int, velocity: Double) -> Bool { guard let kernel else { return false }; return lw_kernel_note_on_source(kernel, Int32(note), Float(velocity), 2) != 0 }
-  func midiRelease(note: Int) -> Bool { guard let kernel else { return false }; return lw_kernel_note_off_source(kernel, Int32(note), 2) != 0 }
-  func midiNoteExpression(note: Int, glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_note_expression_source(kernel, Int32(note), Float(glide), Float(press), Float(slide), 2) } }
-  func midiPanic() { stop() }
 }

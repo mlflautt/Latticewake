@@ -54,6 +54,15 @@ class RealtimeEventQueue {
     dropped_.store(0, std::memory_order_relaxed);
   }
 
+  // The audio consumer alone may discard pending input. Loading the producer
+  // cursor before publishing the new read cursor preserves any event written
+  // after that load, while removing everything already pending at the panic
+  // boundary. This is deliberately not callable from the producer thread.
+  void discardPendingConsumerSide() noexcept {
+    const std::uint32_t write = writeIndex_.load(std::memory_order_acquire);
+    readIndex_.store(write, std::memory_order_release);
+  }
+
  private:
   static_assert(std::atomic<std::uint32_t>::is_always_lock_free,
                 "Latticewake requires lock-free uint32 atomics for audio event handoff");

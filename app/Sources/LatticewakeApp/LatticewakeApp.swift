@@ -9,6 +9,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
   @StateObject private var audio = LatticewakeAudio()
+  @StateObject private var input = PerformanceInputMultiplexer()
   @StateObject private var terrain = TerrainStageModel()
   @StateObject private var midi = MIDIIngress()
   @State private var error = ""
@@ -17,9 +18,6 @@ struct ContentView: View {
   @State private var sceneURL: URL?
   @State private var roles: [RoleControl] = []
   @State private var roleTrace = RoleTraceSummary.empty
-  @State private var keyboard = KeyboardState()
-  @State private var gesture = GestureState()
-  @State private var pointer: CGPoint?
   @State private var performance = PerformanceSettingsV1()
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
@@ -39,7 +37,7 @@ struct ContentView: View {
           Text(audio.running ? "AUDITION" : "READY").font(.caption.monospaced()).foregroundStyle(audio.running ? .mint : .secondary)
           Text("OUT \(Int(audio.outputPeak * 100))%").font(.caption2.monospaced()).foregroundStyle(.secondary)
         }
-        Button("Panic") { midi.panic() }.buttonStyle(.bordered)
+        Button("Panic") { input.panic(reason: "artist") }.buttonStyle(.bordered)
       }
       HStack {
         Button("Library") { libraryOpen.toggle() }.buttonStyle(.bordered)
@@ -75,22 +73,22 @@ struct ContentView: View {
       Text("Sampling path").font(.caption)
       ProgressView("Output", value: audio.outputPeak, total: 1).frame(maxWidth: 300)
       GeometryReader { geometry in
-        TerrainContourSurface(snapshot: terrain.snapshot, pointer: pointer,
-                              heldNotes: keyboard.held.sorted(), activeLanes: audio.activeRoleLanes)
+        TerrainContourSurface(snapshot: terrain.snapshot, pointer: input.pointerPosition,
+                              heldNotes: input.heldNotes.sorted(), activeLanes: audio.activeRoleLanes)
           .contentShape(Rectangle())
           .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-            guard audio.running else { return }
-            if let note = gesture.begin(held: keyboard.held, pointerNote: performance.pointerNote) { audio.pointerPlay(note: note) }
-            let x = GestureState.normalized(value.location.x, length: geometry.size.width)
-            let y = GestureState.normalized(value.location.y, length: geometry.size.height)
-            pointer = CGPoint(x: x*geometry.size.width,y: y*geometry.size.height)
-            for note in gesture.targets {
-              if note == gesture.pointerNote { audio.pointerExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
-              else { audio.keyboardExpression(note: note, glide: 2*x-1, press: 1, slide: 1-y) }
-            }
-          }.onEnded { _ in endGesture() })
+            input.gestureChanged(location: value.location, size: geometry.size, pointerNote: performance.pointerNote)
+          }.onEnded { _ in input.endGesture() })
       }.frame(height: 320)
-      Text("Held notes: \(keyboard.held.sorted().map(String.init).joined(separator: ", "))\(gesture.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
+      Text("Held notes: \(input.heldNotes.sorted().map(String.init).joined(separator: ", "))\(input.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
+      if !input.voices.isEmpty {
+        HStack(spacing: 6) {
+          ForEach(input.voices) { voice in
+            Text("\(voice.label) • G \(String(format: "%.2f", voice.glide)) • P \(String(format: "%.2f", voice.press)) • S \(String(format: "%.2f", voice.slide))")
+              .font(.caption2.monospaced()).padding(5).background(.white.opacity(0.06), in: Capsule())
+          }
+        }
+      }
       StageRoleDeck(roles: roles, activeLanes: audio.activeRoleLanes, running: audio.rolesRunning)
       if libraryOpen || inspectorOpen {
         HStack(alignment: .top, spacing: 12) {
@@ -119,6 +117,8 @@ struct ContentView: View {
       Text("256 immutable trace points • sample \(terrain.snapshot.sampleOffset)").font(.caption).foregroundStyle(.secondary)
       Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
       Text(audio.callbackStatus).font(.caption).foregroundStyle(.secondary)
+      Text(input.status).font(.caption).foregroundStyle(.secondary)
+      if input.overflowRecoveries > 0 { Text("Recovered input overloads: \(input.overflowRecoveries)").font(.caption).foregroundStyle(.orange) }
       }
       HStack {
         Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }
@@ -144,32 +144,22 @@ struct ContentView: View {
     }
     .frame(minWidth: 620, minHeight: 620).focusable().task {
       do {
-        try installScene(Data(DemoScene.gestureJSON.utf8), url: nil, recordUndo: false, dirty: false)
+      input.attach(audio: audio)
+      try installScene(Data(DemoScene.gestureJSON.utf8), url: nil, recordUndo: false, dirty: false)
       } catch { self.error = error.localizedDescription }
-      midi.start(audio: audio)
+      midi.start(input: input)
     }.onKeyPress(phases: [.down, .up, .repeat]) { press in
       guard let note = KeyboardState.notes[press.characters.lowercased()] else { return .ignored }
-      if press.phase == .down, audio.running, keyboard.down(note) { audio.play(note: note) }
-      if press.phase == .up, keyboard.up(note) { audio.release(note: note) }
+      if press.phase == .down { input.keyboardDown(note: note) }
+      if press.phase == .up { input.keyboardUp(note: note) }
       return .handled
     }.onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
-      endGesture()
-      for note in keyboard.releaseAll() { audio.release(note: note) }
+      input.focusLost()
     }.onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
       audio.refreshMeter()
     }.onChange(of: audio.running) { _, running in
-      if !running { endGesture(); _ = keyboard.releaseAll() }
-    }.onDisappear { for note in keyboard.releaseAll() { audio.release(note: note) }; midi.stop(); audio.stop() }
-  }
-
-  private func endGesture() {
-    let ended = gesture.end()
-    if let note = ended.note { audio.pointerRelease(note: note) }
-    for note in ended.targets {
-      if note == ended.note { audio.pointerExpression(note: note, glide: 0, press: 1, slide: 0) }
-      else { audio.keyboardExpression(note: note, glide: 0, press: 1, slide: 0) }
-    }
-    pointer = nil
+      if !running { input.audioStopped() }
+    }.onDisappear { input.focusLost(); midi.stop(); audio.stop() }
   }
 
   private func applyRoleChanges() {

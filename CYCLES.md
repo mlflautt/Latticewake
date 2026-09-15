@@ -286,3 +286,16 @@ byte-preserved legacy files, and equivalent migrated render fixtures.
 - Retained work: live terrain playhead animation, richer contour field density,
   full parameter editors, and a reduced-motion automation fixture remain open.
   Cycle 035 input/MPE admission is next.
+
+### Cycle 035 — input multiplexer and panic recovery
+
+- Scope: one main-actor direct-performance producer, source-aware keyboard,
+  pointer, MIDI, and MPE ownership, visible direct-voice expression state, and
+  callback-owned panic recovery for queue overload.
+- Evidence: normal C++ core/bridge/playable tests, ASan/UBSan fixtures, 14 Swift
+  tests, an ad-hoc signed standalone build, and a technical local-device smoke
+  receipt. See `handoffs/cycle-035.md`.
+- Non-goals: callback admission, Core Audio internal lock/allocation proof,
+  hardware MPE, MIDI output, human listening, or aesthetic evaluation.
+- Retained work: exact callback-admission instrumentation and target-device
+  gesture/MPE review remain open before a real-time admission decision.

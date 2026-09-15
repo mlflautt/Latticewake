@@ -66,6 +66,7 @@ int lw_kernel_note_off_source(LWKernelRef* kernel, int note, unsigned int source
 int lw_kernel_expression(LWKernelRef* kernel, float glide, float press, float slide);
 int lw_kernel_note_expression(LWKernelRef* kernel, int note, float glide, float press, float slide);
 int lw_kernel_note_expression_source(LWKernelRef* kernel, int note, float glide, float press, float slide, unsigned int source);
+int lw_kernel_panic(LWKernelRef* kernel);
 int lw_kernel_render(LWKernelRef* kernel, float* output, unsigned int frames);
 int lw_kernel_status(const LWKernelRef* kernel, LWKernelStatus* status);
 void lw_kernel_set_roles_running(LWKernelRef* kernel, unsigned int running);

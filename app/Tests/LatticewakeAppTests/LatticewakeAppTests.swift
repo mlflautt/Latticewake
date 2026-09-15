@@ -62,9 +62,9 @@ final class LatticewakeAppTests: XCTestCase {
   try audio.setScene(bytes: Data(DemoScene.playableJSON.utf8))
   try audio.start()
   defer { audio.stop() }
-  audio.play(note: 60)
+  XCTAssertTrue(audio.enqueueNoteOn(note: 60, velocity: 0.7, source: PerformanceInputSource.keyboard.token))
   try await Task.sleep(for: .seconds(1))
-  audio.release(note: 60)
+  XCTAssertTrue(audio.enqueueNoteOff(note: 60, source: PerformanceInputSource.keyboard.token))
   try await Task.sleep(for: .milliseconds(200))
   audio.stop()
   XCTAssertGreaterThan(audio.auditionReceipt?.callbackCount ?? 0, 0)
@@ -87,6 +87,17 @@ final class LatticewakeAppTests: XCTestCase {
     MIDIMessage(status: 0xB1, data1: 74, data2: 127)
   ])
 }
+
+  func testPerformanceInputSourcesKeepMpeChannelsDistinct() {
+    XCTAssertNotEqual(PerformanceInputSource.keyboard.token, PerformanceInputSource.pointer.token)
+    XCTAssertNotEqual(PerformanceInputSource.midi(channel: 2).token, PerformanceInputSource.midi(channel: 3).token)
+    XCTAssertLessThan(PerformanceInputSource.midi(channel: 16).token, 100)
+    let samePitchOnDifferentChannels = [
+      PerformanceVoice(source: .midi(channel: 2), note: 60, age: 1, glide: 0, press: 1, slide: 0),
+      PerformanceVoice(source: .midi(channel: 3), note: 60, age: 2, glide: 0, press: 1, slide: 0)
+    ]
+    XCTAssertNotEqual(samePitchOnDifferentChannels[0].id, samePitchOnDifferentChannels[1].id)
+  }
   func testSceneStoreRoundTrips() throws {
   let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
   defer { try? FileManager.default.removeItem(at: url) }

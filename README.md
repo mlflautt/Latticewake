@@ -64,6 +64,11 @@ blocks above 4,096 frames as silence. Its bridge stress evidence is documented
 in the real-time admission gate; it is not target-device callback admission or
 a listening result.
 
+Direct performance now enters through one main-actor input multiplexer. It
+keeps keyboard, pointer, MIDI, and MPE channel ownership distinct before
+submitting bounded source-aware events to the bridge. A queue overload requests
+a callback-owned panic boundary; it never resets live audio state from SwiftUI.
+
 For a real standalone audition, follow the
 [target-Mac protocol](docs/TARGET_MAC_AUDITION.md). Its technical receipt and
 listener observation are intentionally separate evidence.

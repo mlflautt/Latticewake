@@ -55,7 +55,7 @@ enum MIDIMessageDecoder {
   @Published private(set) var status = "MIDI inactive"
   @Published private(set) var mode: LatticewakeMpeMode = .legacy
 
-  private weak var audio: LatticewakeAudio?
+  private weak var input: PerformanceInputMultiplexer?
   private var client = MIDIClientRef()
   private var port = MIDIPortRef()
   private var mpe: OpaquePointer?
@@ -74,9 +74,9 @@ enum MIDIMessageDecoder {
     sourceCount = 0
   }
 
-  func start(audio: LatticewakeAudio) {
+  func start(input: PerformanceInputMultiplexer) {
     guard client == 0 else { return }
-    self.audio = audio
+    self.input = input
     configure(mode: .legacy)
     guard MIDIClientCreateWithBlock("Latticewake MIDI" as CFString, &client, { [weak self] _ in
       Task { @MainActor [weak self] in self?.refreshSources() }
@@ -102,7 +102,7 @@ enum MIDIMessageDecoder {
     if let mpe { lw_mpe_reset(mpe) }
     sustain.removeAll()
     deferredReleases.removeAll()
-    audio?.midiPanic()
+    input?.panic(reason: "MIDI")
     status = "MIDI panic"
   }
 
@@ -130,7 +130,7 @@ enum MIDIMessageDecoder {
     switch message.status & 0xF0 {
     case 0x90 where message.data2 > 0:
       if lw_mpe_note_on(mpe, Int32(channel), Int32(message.data1)) != 0 {
-        _ = audio?.midiPlay(note: Int(message.data1), velocity: Double(message.data2) / 127.0)
+        input?.midiNoteOn(note: Int(message.data1), velocity: Double(message.data2) / 127.0, channel: channel)
       }
     case 0x80, 0x90:
       if sustain.contains(channel) { deferredReleases.append((channel, Int(message.data1))) }
@@ -156,14 +156,14 @@ enum MIDIMessageDecoder {
 
   private func release(channel: Int, note: Int) {
     guard let mpe, lw_mpe_note_off(mpe, Int32(channel), Int32(note)) != 0 else { return }
-    _ = audio?.midiRelease(note: note)
+    input?.midiNoteOff(note: note, channel: channel)
   }
 
   private func applyExpression(channel: Int, glide: Double, press: Double, slide: Double) {
     guard let mpe, lw_mpe_expression(mpe, Int32(channel), Float(glide), Float(press), Float(slide)) != 0 else { return }
     var note: Int32 = 0
     guard lw_mpe_active_note(mpe, Int32(channel), &note) != 0 else { return }
-    audio?.midiNoteExpression(note: Int(note), glide: glide, press: press, slide: slide)
+    input?.midiExpression(note: Int(note), channel: channel, glide: glide, press: press, slide: slide)
   }
 
   nonisolated private static func messages(from list: UnsafePointer<MIDIPacketList>) -> [MIDIMessage] {
