@@ -15,6 +15,10 @@ contract is [Scene v0](contracts/SCENE_V0.md); the component-addressable
 The supplied research evidence is preserved intact in
 [`research/source-reports/`](research/source-reports/), with hashes recorded in
 the foundation document.
+External synth manuals and the comparative first-principles report are kept in
+[`research/reference-synths/`](research/reference-synths/). Its index records
+scope, retained lessons, explicit non-goals, and source hashes so product
+influences remain reviewable rather than implicit.
 
 Run the portable core and bridge verification with:
 
