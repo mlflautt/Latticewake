@@ -39,6 +39,11 @@ surface. Scene storage must evolve them as scalable named lanes, each routed to
 prepared engine slots and a common harmonic, scale, transport, and terrain
 context.
 
+Persistent lane enable state belongs to the Scene. Mute and Solo are transient
+performance masks: they prepare an effective runtime role set without changing
+scene bytes, dirty state, receipts, or save output. Mute wins over Solo, and a
+mask can never enable a lane disabled by the Scene.
+
 ## Real-time boundary
 
 An explicit prepared handoff creates immutable render state before playback.

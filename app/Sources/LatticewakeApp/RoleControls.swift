@@ -38,6 +38,30 @@ struct RoleControl: Identifiable, Equatable {
   }
 }
 
+struct RolePerformanceMask: Equatable {
+  var muted: Set<Int> = []
+  var soloed: Set<Int> = []
+
+  var isActive: Bool { !muted.isEmpty || !soloed.isEmpty }
+
+  mutating func toggleMute(_ role: Int) {
+    if !muted.insert(role).inserted { muted.remove(role) }
+  }
+
+  mutating func toggleSolo(_ role: Int) {
+    if !soloed.insert(role).inserted { soloed.remove(role) }
+  }
+
+  func applying(to controls: [RoleControl]) -> [RoleControl] {
+    controls.map { control in
+      var effective = control
+      let passesSolo = soloed.isEmpty || soloed.contains(control.id)
+      effective.enabled = control.enabled && passesSolo && !muted.contains(control.id)
+      return effective
+    }
+  }
+}
+
 enum RoleSceneBridge {
   static func controls(from bytes: Data) throws -> [RoleControl] {
     guard let json = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 20) }
@@ -75,6 +99,9 @@ enum RoleSceneBridge {
 
 struct RoleControlsView: View {
   @Binding var controls: [RoleControl]
+  let performanceMask: RolePerformanceMask
+  let toggleMute: (Int) -> Void
+  let toggleSolo: (Int) -> Void
   let apply: () -> Void
 
   var body: some View {
@@ -83,6 +110,12 @@ struct RoleControlsView: View {
         VStack(alignment: .leading, spacing: 5) {
           HStack {
             Toggle(RoleControl.names[control.id], isOn: $control.enabled)
+            Button("M") { toggleMute(control.id) }
+              .buttonStyle(.borderedProminent).tint(performanceMask.muted.contains(control.id) ? .orange : .gray)
+              .help("Temporarily mute \(RoleControl.names[control.id]) without changing the scene")
+            Button("S") { toggleSolo(control.id) }
+              .buttonStyle(.borderedProminent).tint(performanceMask.soloed.contains(control.id) ? .mint : .gray)
+              .help("Temporarily solo \(RoleControl.names[control.id]) without changing the scene")
             Spacer()
             Picker("Pattern", selection: $control.pattern) {
               let patterns = RoleControl.patterns(for: control.id)
@@ -100,6 +133,10 @@ struct RoleControlsView: View {
               .font(.caption).frame(width: 112)
           }
         }.padding(.vertical, 3)
+      }
+      if performanceMask.isActive {
+        Text("Performance mask active — scene enable states are unchanged.")
+          .font(.caption2).foregroundStyle(.orange)
       }
       Button("Apply Role Changes", action: apply).buttonStyle(.borderedProminent)
     }.frame(maxWidth: .infinity, alignment: .leading)

@@ -17,6 +17,7 @@ struct ContentView: View {
   @State private var sceneBytes = Data()
   @State private var sceneURL: URL?
   @State private var roles: [RoleControl] = []
+  @State private var rolePerformanceMask = RolePerformanceMask()
   @State private var roleTrace = RoleTraceSummary.empty
   @State private var performance = PerformanceSettingsV1()
   @State private var editorControls = SceneEditorControls()
@@ -80,7 +81,9 @@ struct ContentView: View {
         Text(audio.running ? "Audition running" : "Start to play").foregroundStyle(.secondary)
       }
       if !roles.isEmpty {
-        RoleControlsView(controls: $roles, apply: applyRoleChanges)
+        RoleControlsView(controls: $roles, performanceMask: rolePerformanceMask,
+                         toggleMute: toggleRoleMute, toggleSolo: toggleRoleSolo,
+                         apply: applyRoleChanges)
       }
       Text(audio.rolesRunning ? "Roles playing • \(audio.activeRoleLanes) active lane\(audio.activeRoleLanes == 1 ? "" : "s")" : "Roles stopped")
         .font(.caption).foregroundStyle(.secondary)
@@ -202,6 +205,29 @@ struct ContentView: View {
     do {
       let updated = try RoleSceneBridge.apply(roles, to: sceneBytes)
       try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
+      error = ""
+    } catch { self.error = error.localizedDescription }
+  }
+
+  private func toggleRoleMute(_ role: Int) {
+    rolePerformanceMask.toggleMute(role)
+    applyRolePerformanceMask()
+  }
+
+  private func toggleRoleSolo(_ role: Int) {
+    rolePerformanceMask.toggleSolo(role)
+    applyRolePerformanceMask()
+  }
+
+  private func applyRolePerformanceMask() {
+    do {
+      let effectiveRoles = rolePerformanceMask.applying(to: roles)
+      let runtimeBytes = try RoleSceneBridge.apply(effectiveRoles, to: sceneBytes)
+      let resume = audio.rolesRunning
+      if resume { audio.stopRoles() }
+      try audio.setScene(bytes: runtimeBytes)
+      roleTrace = try RoleTraceBridge.preview(sceneBytes: runtimeBytes)
+      if resume { audio.startRoles() }
       error = ""
     } catch { self.error = error.localizedDescription }
   }
@@ -341,6 +367,7 @@ struct ContentView: View {
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
     roles = try RoleSceneBridge.controls(from: bytes)
+    rolePerformanceMask = .init()
     editorControls = try SceneEditorBridge.controls(from: bytes)
     modulationControls = try ModulationBridge.controls(from: bytes)
     roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)

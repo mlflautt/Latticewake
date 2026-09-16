@@ -345,6 +345,20 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertTrue(proposal.patches.contains(ProposalPatchV1(field: .motifBVariation, value: 0.45)))
   }
 
+  func testRolePerformanceMaskIsTransientAndMuteWinsOverSolo() throws {
+    let original = try RoleSceneBridge.controls(from: Data(DemoScene.fourRoleJSON.utf8))
+    var mask = RolePerformanceMask()
+    mask.toggleSolo(2)
+    var effective = mask.applying(to: original)
+    XCTAssertEqual(effective.map(\.enabled), [false, false, original[2].enabled, false])
+    mask.toggleMute(2)
+    effective = mask.applying(to: original)
+    XCTAssertFalse(effective[2].enabled)
+    XCTAssertEqual(try RoleSceneBridge.controls(from: Data(DemoScene.fourRoleJSON.utf8)), original)
+    mask.toggleSolo(2)
+    XCTAssertTrue(mask.soloed.isEmpty)
+  }
+
   func testProposalFixtureDrivesValidateAcceptUndoReceiptPath() throws {
     let baseBytes = try SceneDocumentBridge.canonicalV1(from: Data(DemoScene.gestureJSON.utf8))
     let baseControls = try SceneEditorBridge.controls(from: baseBytes)
