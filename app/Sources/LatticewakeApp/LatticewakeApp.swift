@@ -75,11 +75,13 @@ struct ContentView: View {
       GeometryReader { geometry in
         TerrainContourSurface(snapshot: terrain.snapshot, pointer: input.pointerPosition,
                               heldNotes: input.heldNotes.sorted(), activeLanes: audio.activeRoleLanes)
+          .frame(width: max(1, geometry.size.width), height: 320)
           .contentShape(Rectangle())
           .gesture(DragGesture(minimumDistance: 0).onChanged { value in
             input.gestureChanged(location: value.location, size: geometry.size, pointerNote: performance.pointerNote)
           }.onEnded { _ in input.endGesture() })
-      }.frame(height: 320)
+      }
+      .frame(minHeight: 320, maxHeight: 320)
       Text("Held notes: \(input.heldNotes.sorted().map(String.init).joined(separator: ", "))\(input.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
       if !input.voices.isEmpty {
         HStack(spacing: 6) {
@@ -139,15 +141,18 @@ struct ContentView: View {
       Text(String(cString: latticewake_core_version())).font(.caption2).foregroundStyle(.secondary)
       if !error.isEmpty { Text(error).foregroundStyle(.red) }
       }
-      .frame(maxWidth: .infinity)
-      .padding()
+      .frame(maxWidth: 1_040, alignment: .leading)
+      .padding(.horizontal, 16)
+      .padding(.vertical)
     }
-    .frame(minWidth: 620, minHeight: 620).focusable().task {
+    .frame(minWidth: 620, minHeight: 620)
+    .focusable().task {
       do {
       input.attach(audio: audio)
       try installScene(Data(DemoScene.gestureJSON.utf8), url: nil, recordUndo: false, dirty: false)
       } catch { self.error = error.localizedDescription }
-      midi.start(input: input)
+      // MIDI connection remains deliberately opt-in while the standalone
+      // Core MIDI worker-thread boundary is being revalidated on this target.
     }.onKeyPress(phases: [.down, .up, .repeat]) { press in
       guard let note = KeyboardState.notes[press.characters.lowercased()] else { return .ignored }
       if press.phase == .down { input.keyboardDown(note: note) }
@@ -155,8 +160,12 @@ struct ContentView: View {
       return .handled
     }.onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in
       input.focusLost()
-    }.onReceive(Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()) { _ in
-      audio.refreshMeter()
+    }.task(id: audio.running) {
+      guard audio.running else { return }
+      while !Task.isCancelled && audio.running {
+        audio.refreshMeter()
+        try? await Task.sleep(for: .milliseconds(50))
+      }
     }.onChange(of: audio.running) { _, running in
       if !running { input.audioStopped() }
     }.onDisappear { input.focusLost(); midi.stop(); audio.stop() }

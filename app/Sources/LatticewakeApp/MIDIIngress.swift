@@ -69,6 +69,40 @@ enum MIDIMessageDecoder {
   }
 }
 
+// These are intentionally file-scope functions rather than methods of
+// `MIDIIngress`: Core MIDI retains their blocks and invokes them on worker
+// threads. A closure nested under an @MainActor type can retain executor
+// isolation even when the method is marked nonisolated.
+private func createMIDIClient(refreshDispatcher: MIDIRefreshDispatcher) -> MIDIClientRef? {
+  var created = MIDIClientRef()
+  let result = MIDIClientCreateWithBlock("Latticewake MIDI" as CFString, &created, { [refreshDispatcher] _ in
+    refreshDispatcher.refresh()
+  })
+  return result == noErr ? created : nil
+}
+
+func createMIDIInputPort(
+  client: MIDIClientRef,
+  dispatcher: MIDIReceiveDispatcher
+) -> MIDIPortRef? {
+  var created = MIDIPortRef()
+  let result = MIDIInputPortCreateWithBlock(client, "Latticewake Input" as CFString, &created, { [dispatcher] packetList, _ in
+    dispatcher.submit(midiMessages(from: packetList))
+  })
+  return result == noErr ? created : nil
+}
+
+private func midiMessages(from list: UnsafePointer<MIDIPacketList>) -> [MIDIMessage] {
+  var result: [MIDIMessage] = []
+  var packet = withUnsafePointer(to: list.pointee.packet) { $0 }
+  for _ in 0..<Int(list.pointee.numPackets) {
+    let bytes = withUnsafeBytes(of: packet.pointee.data) { Array($0.prefix(Int(packet.pointee.length))) }
+    result.append(contentsOf: MIDIMessageDecoder.decode(bytes))
+    packet = UnsafePointer(MIDIPacketNext(packet))
+  }
+  return result
+}
+
 @_silgen_name("lw_mpe_state_create") private func lw_mpe_state_create(
   _ mode: UInt32, _ masterChannel: Int32, _ memberCount: Int32
 ) -> OpaquePointer?
@@ -115,26 +149,26 @@ enum MIDIMessageDecoder {
       Task { @MainActor [weak self] in self?.refreshSources() }
     }
     self.refreshDispatcher = refreshDispatcher
-    guard MIDIClientCreateWithBlock("Latticewake MIDI" as CFString, &client, { [refreshDispatcher] _ in
-      refreshDispatcher.refresh()
-    }) == noErr else {
+    guard let createdClient = createMIDIClient(refreshDispatcher: refreshDispatcher) else {
       self.refreshDispatcher = nil
       status = "MIDI client unavailable"
       return
     }
+    client = createdClient
     let dispatcher = MIDIReceiveDispatcher { [weak self] messages in
       Task { @MainActor [weak self] in
         self?.receive(messages)
       }
     }
     receiveDispatcher = dispatcher
-    guard MIDIInputPortCreateWithBlock(client, "Latticewake Input" as CFString, &port, { [dispatcher] packetList, _ in
-      dispatcher.submit(MIDIIngress.messages(from: packetList))
-    }) == noErr else {
+    guard let createdPort = createMIDIInputPort(client: client, dispatcher: dispatcher) else {
+      MIDIClientDispose(client)
+      client = 0
       receiveDispatcher = nil
       status = "MIDI input unavailable"
       return
     }
+    port = createdPort
     refreshSources()
   }
 
@@ -216,14 +250,4 @@ enum MIDIMessageDecoder {
     input?.midiExpression(note: Int(note), channel: channel, glide: glide, press: press, slide: slide)
   }
 
-  nonisolated private static func messages(from list: UnsafePointer<MIDIPacketList>) -> [MIDIMessage] {
-    var result: [MIDIMessage] = []
-    var packet = withUnsafePointer(to: list.pointee.packet) { $0 }
-    for _ in 0..<Int(list.pointee.numPackets) {
-      let bytes = withUnsafeBytes(of: packet.pointee.data) { Array($0.prefix(Int(packet.pointee.length))) }
-      result.append(contentsOf: MIDIMessageDecoder.decode(bytes))
-      packet = UnsafePointer(MIDIPacketNext(packet))
-    }
-    return result
-  }
 }

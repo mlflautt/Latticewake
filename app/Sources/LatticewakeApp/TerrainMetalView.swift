@@ -109,7 +109,9 @@ struct TerrainContourSurface: View {
 
   var body: some View {
     ZStack {
-      TerrainMetalRepresentable(snapshot: snapshot)
+      // Canvas is the stable baseline while the MTKView path is re-admitted for
+      // idle cost on the target OS. It consumes the same immutable snapshot.
+      TerrainStageView(snapshot: snapshot)
       Canvas { context, size in
         drawContours(context: context, size: size)
         if let pointer {

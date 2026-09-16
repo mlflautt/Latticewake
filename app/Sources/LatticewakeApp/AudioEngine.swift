@@ -89,12 +89,16 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   @Published private(set) var rolesRunning = false
   @Published private(set) var activeRoleLanes = 0
   func refreshMeter() {
-    outputPeak = kernel.map { Double(lw_kernel_output_peak($0)) } ?? 0
-    if let kernel {
+    guard let kernel else { return }
+    let peak = Double(lw_kernel_output_peak(kernel))
+    if abs(peak - outputPeak) > 0.002 { outputPeak = peak }
+    do {
       var status = BridgeRoleStatus()
       if lw_kernel_role_status(kernel, &status) != 0 {
-        rolesRunning = status.running != 0
-        activeRoleLanes = Int(status.activeLanes)
+        let nextRolesRunning = status.running != 0
+        let nextActiveLanes = Int(status.activeLanes)
+        if rolesRunning != nextRolesRunning { rolesRunning = nextRolesRunning }
+        if activeRoleLanes != nextActiveLanes { activeRoleLanes = nextActiveLanes }
       }
     }
   }

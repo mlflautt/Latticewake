@@ -116,6 +116,13 @@ dispatcher that decodes packets off-actor and explicitly schedules delivery to
 the main-actor input multiplexer. A Swift regression test calls that dispatcher
 from a background queue and verifies receipt on the main actor.
 
+`v0.35.0-alpha.3` showed the dispatcher alone was insufficient: because the
+Core MIDI closure literal was still created in a main-actor method, its stored
+callback retained the executor assertion. `v0.35.0-alpha.4` creates both client
+and input-port blocks in nonisolated factory functions. Its Swift fixture sends
+a packet through a virtual Core MIDI source and verifies delivery reaches the
+main actor through the dispatcher.
+
 This corrects MIDI ingress isolation only. It neither changes the audio callback
 route nor supplies the allocation, lock, deadline, hardware-MPE, or listening
 evidence required for callback admission.

@@ -117,6 +117,40 @@ final class LatticewakeAppTests: XCTestCase {
     await fulfillment(of: [refreshed], timeout: 1)
   }
 
+  func testCoreMIDIPacketPortDeliversThroughNonisolatedFactory() async {
+    let received = expectation(description: "Core MIDI packet reaches main actor")
+    let dispatcher = MIDIReceiveDispatcher { messages in
+      Task { @MainActor in
+        XCTAssertTrue(Thread.isMainThread)
+        XCTAssertEqual(messages, [MIDIMessage(status: 0x90, data1: 60, data2: 100)])
+        received.fulfill()
+      }
+    }
+    var client = MIDIClientRef()
+    XCTAssertEqual(MIDIClientCreateWithBlock("Latticewake MIDI Test" as CFString, &client, { _ in }), noErr)
+    defer { MIDIClientDispose(client) }
+    guard let inputPort = createMIDIInputPort(client: client, dispatcher: dispatcher) else {
+      return XCTFail("could not create Core MIDI input port")
+    }
+    defer { MIDIPortDispose(inputPort) }
+    var source = MIDIEndpointRef()
+    XCTAssertEqual(MIDISourceCreate(client, "Latticewake MIDI Test Source" as CFString, &source), noErr)
+    defer { MIDIEndpointDispose(source) }
+    XCTAssertEqual(MIDIPortConnectSource(inputPort, source, nil), noErr)
+
+    let storage = UnsafeMutableRawPointer.allocate(byteCount: 1024, alignment: MemoryLayout<MIDIPacketList>.alignment)
+    defer { storage.deallocate() }
+    let packetList = storage.bindMemory(to: MIDIPacketList.self, capacity: 1)
+    let packet = MIDIPacketListInit(packetList)
+    let bytes: [UInt8] = [0x90, 60, 100]
+    let added = bytes.withUnsafeBufferPointer {
+      MIDIPacketListAdd(packetList, 1024, packet, 0, $0.count, $0.baseAddress!)
+    }
+    XCTAssertNotNil(added)
+    XCTAssertEqual(MIDIReceived(source, packetList), noErr)
+    await fulfillment(of: [received], timeout: 1)
+  }
+
   func testPerformanceInputSourcesKeepMpeChannelsDistinct() {
     XCTAssertNotEqual(PerformanceInputSource.keyboard.token, PerformanceInputSource.pointer.token)
     XCTAssertNotEqual(PerformanceInputSource.midi(channel: 2).token, PerformanceInputSource.midi(channel: 3).token)

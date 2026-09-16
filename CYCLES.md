@@ -311,3 +311,23 @@ byte-preserved legacy files, and equivalent migrated render fixtures.
   `handoffs/cycle-035-midi-isolation-correction.md`.
 - Non-goal: this correction does not establish endpoint/hardware MPE behavior
   or callback admission.
+
+### Cycle 035 correction follow-up — nonisolated Core MIDI factories
+
+- Trigger: `v0.35.0-alpha.3` still trapped on an exact Core MIDI worker thread
+  because its callback literals were constructed inside a main-actor method.
+- Scope: Core MIDI client and input-port callbacks are now constructed only in
+  explicitly nonisolated factory functions; a virtual-source fixture exercises
+  the real packet callback path.
+- Non-goal: this is MIDI ingress correctness, not hardware-MPE validation or
+  callback admission. See `handoffs/cycle-035-midi-isolation-correction.md`.
+
+### Cycle 035 correction follow-up — stable standalone baseline
+
+- Scope: constrained the Stage's initial layout, made meter publication active
+  only during audio rendering, and retained the Canvas terrain surface as the
+  target-Mac baseline while Metal idle cost is investigated.
+- Safety: Core MIDI automatic connection is disarmed until a dedicated hardware
+  endpoint session confirms the worker-thread callback boundary.
+- Evidence: signed `0.35.0-alpha.9` startup smoke remained live without a new
+  crash record. Debug idle CPU remains an open performance issue.
