@@ -42,16 +42,16 @@ It is still not admitted to a device callback: see the
 human listening result is claimed. A Cycle 032 target-device smoke run is
 recorded as technical evidence only.
 
-The native Terrain Stage now renders the immutable C++ terrain trace through a
-Metal-backed 2D surface, with a separate contour overlay and explicit direct
-voice/lane activity. It is an authoritative 2D performance surface, not a 3D
-view or creative evaluation.
+The native Terrain Stage currently renders the immutable C++ terrain trace
+through the Canvas baseline, with a separate contour overlay and explicit
+direct voice/lane activity. The Metal adapter remains retained but is pending a
+target-Mac idle-cost admission check. The surface is authoritative 2D, not a
+3D view or creative evaluation.
 
-Core MIDI sources are now discovered by the standalone app with Legacy, MPE
-Lower, and MPE Upper ingress modes. This is tested packet/ownership routing;
-it has not received a hardware session, MIDI output support, or per-note MPE
-voice-rendering hardware proof. The portable kernel does retain expression per
-fixed voice and has deterministic fixtures for note-specific routing.
+Core MIDI packet/ownership routing is covered by virtual-source fixtures, but
+automatic endpoint connection is currently disarmed at app launch pending a
+dedicated target-device lifecycle session. MIDI output and per-note MPE
+voice-rendering hardware proof remain open.
 
 The Stage exposes four role controls and a live role transport. Role events are
 prepared deterministically outside the callback and consumed through the same
@@ -72,6 +72,11 @@ a callback-owned panic boundary; it never resets live audio state from SwiftUI.
 For a real standalone audition, follow the
 [target-Mac protocol](docs/TARGET_MAC_AUDITION.md). Its technical receipt and
 listener observation are intentionally separate evidence.
+
+For self-contained target-Mac crash investigation, follow the
+[crash triage protocol](docs/CRASH_TRIAGE_PROTOCOL.md). It captures the exact
+build identity, new reports, classification, and a bounded launch smoke before
+any human report is needed.
 
 Build a local debug `.app` bundle with:
 

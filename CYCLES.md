@@ -331,3 +331,10 @@ byte-preserved legacy files, and equivalent migrated render fixtures.
   endpoint session confirms the worker-thread callback boundary.
 - Evidence: signed `0.35.0-alpha.9` startup smoke remained live without a new
   crash record. Debug idle CPU remains an open performance issue.
+
+### Cycle 035 reliability infrastructure — target-Mac crash triage
+
+- Scope: exact-build crash baseline, bounded launch smoke, report capture,
+  fault classification, and handoff evidence bundle.
+- Entry points: `make crash-baseline`, `make crash-smoke`, and
+  `make crash-report`; see `docs/CRASH_TRIAGE_PROTOCOL.md`.
