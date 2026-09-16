@@ -242,8 +242,10 @@ struct ContentView: View {
   private func validateAgentProposal() {
     do {
       let proposal = try ProposalContractV1.decode(Data(proposalJSON.utf8))
-      let candidate = try ProposalContractV1.validatedCandidate(proposal, base: editorControls, sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256, frozen: frozenComponents)
-      validatedAgentProposal = ValidatedAgentProposal(proposal: proposal, candidate: candidate)
+      validatedAgentProposal = try ProposalContractV1.validatedProposal(proposal, base: editorControls,
+                                                                         roles: roles,
+                                                                         sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256,
+                                                                         frozen: frozenComponents)
       proposalStatus = "Validated \(proposal.proposalID); preview or accept explicitly."
     } catch { validatedAgentProposal = nil; proposalStatus = error.localizedDescription }
   }
@@ -276,20 +278,25 @@ struct ContentView: View {
 
   private func previewAgentProposal() {
     guard let validatedAgentProposal else { return }
-    do { try previewTemporary(SceneEditorBridge.apply(validatedAgentProposal.candidate, to: sceneBytes), label: "Agent proposal preview") }
+    do { try previewTemporary(agentCandidateBytes(validatedAgentProposal), label: "Agent proposal preview") }
     catch { self.error = error.localizedDescription }
   }
 
   private func acceptAgentProposal() {
     guard let validatedAgentProposal else { return }
     do {
-      let candidate = try SceneEditorBridge.apply(validatedAgentProposal.candidate, to: sceneBytes)
+      let candidate = try agentCandidateBytes(validatedAgentProposal)
       let receipt = AgentProposalReceiptV1(proposal: validatedAgentProposal.proposal, candidateSceneSHA256: SceneLibrary.receipt(for: candidate).sha256)
       try installScene(candidate, url: sceneURL, recordUndo: true, dirty: true)
       acceptedAgentReceipts.append(receipt)
       proposalStatus = "Accepted \(receipt.proposalID); save the scene to retain its receipt."
       self.validatedAgentProposal = nil
     } catch { self.error = error.localizedDescription }
+  }
+
+  private func agentCandidateBytes(_ proposal: ValidatedAgentProposal) throws -> Data {
+    let editorApplied = try SceneEditorBridge.apply(proposal.editorCandidate, to: sceneBytes)
+    return try RoleSceneBridge.apply(proposal.roleCandidate, to: editorApplied)
   }
 
   private func rejectAgentProposal() { validatedAgentProposal = nil; proposalStatus = proposalJSON.isEmpty ? "" : "Proposal rejected; scene unchanged." }

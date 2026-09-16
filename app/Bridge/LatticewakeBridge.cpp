@@ -169,7 +169,16 @@ int lw_terrain_frame_scene_json(const char* json,const unsigned long long sample
   *pointCount=static_cast<unsigned int>(frame->points.size());
   return 1;
 }
-int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,0};return 1; }
+static unsigned int rolePatternIndex(const latticewake::RoleLane& role) {
+  if (role.pattern == std::vector<int>{0}) return 0U;
+  if (role.pattern == std::vector<int>{0, 2, 4}) return 1U;
+  if (role.pattern == std::vector<int>{4, 2, 0}) return 2U;
+  // The only remaining supported UI pattern is Pulse. Classifying unknown
+  // imported material as Pulse retains a non-held shape rather than silently
+  // rewriting it to Held when the role controls are round-tripped.
+  return 3U;
+}
+int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,rolePatternIndex(role)};return 1; }
 int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,const LWRoleControl* control,char** canonicalJson) {
   if(!json||!control||!canonicalJson||control->pattern>3U)return 0;
   latticewake::SceneSerializationError error;

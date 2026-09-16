@@ -19,8 +19,11 @@ The receiver validates the exact base-scene hash, exact active freeze set, a
 maximum of 16 unique allowlisted fields, and field ranges before deriving a
 temporary candidate. The initial fields are Surface (`terrainDetail`,
 `terrainZoom`), Traversal (`traversalRadiusX`, `traversalRadiusY`,
-`traversalTranslationX`), and Articulation (`attackSeconds`, `releaseSeconds`,
-`gain`).
+`traversalTranslationX`), Articulation (`attackSeconds`, `releaseSeconds`,
+`gain`), and the four initial role/lane controls. Role fields use an explicit
+role prefix (`drone`, `pad`, `motifA`, or `motifB`) followed by `Enabled`,
+`Density`, `Range`, `Pattern`, or `SeedOffset`. `Enabled`, `Pattern`, and
+`SeedOffset` must be whole numeric values in their documented bounds.
 
 Validation and candidate derivation are pure operations. They do not alter the
 audio callback, current scene, library document, undo history, or user taste.
@@ -37,3 +40,13 @@ candidate position is a stable revisit handle, not a quality rank: Latticewake
 does not select, save, or recommend one. If every editable component is frozen,
 it creates no candidate at all. Each candidate still uses explicit Preview,
 Accept, Reject-all, Undo, and a receipt on acceptance.
+
+## Role proposals
+
+Role patches are validated against the active four-role controls before a
+candidate is prepared. They are never sent directly to transport or the audio
+callback. The `Lanes` freeze boundary prevents every role patch; a valid role
+candidate is prepared through the same explicit Preview, Accept, Undo, and
+receipt path as a surface patch. The built-in `Drone Foundation` and `Motif
+Pulse` palette entries are deliberately small examples, not musical rankings
+or autonomous composition.

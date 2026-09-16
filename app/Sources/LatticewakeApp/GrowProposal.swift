@@ -4,7 +4,14 @@ import SwiftUI
 enum GrowDepth: String, CaseIterable, Identifiable { case subtle = "Subtle", related = "Related", exploratory = "Exploratory"; var id: String { rawValue }
   var amplitude: Double { switch self { case .subtle: 0.08; case .related: 0.20; case .exploratory: 0.36 } }
 }
-struct FrozenComponents: Equatable { var surface = false; var traversal = false; var articulation = false }
+struct FrozenComponents: Equatable {
+  var surface = false
+  var traversal = false
+  var articulation = false
+  /// Role/lane state has its own creative boundary so a proposal cannot make
+  /// material play simply because the artist froze the terrain itself.
+  var lanes = false
+}
 struct GrowProposal: Identifiable, Equatable {
   let id: String
   let baseSceneHash: String
@@ -93,7 +100,7 @@ struct GrowControlsView: View {
   var body: some View { VStack(alignment: .leading, spacing: 6) {
     Text("Freeze & Grow").font(.caption.bold()).foregroundStyle(.mint)
     Picker("Depth", selection: $depth) { ForEach(GrowDepth.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
-    Toggle("Freeze Surface", isOn: $frozen.surface); Toggle("Freeze Traversal", isOn: $frozen.traversal); Toggle("Freeze Articulation", isOn: $frozen.articulation)
+    Toggle("Freeze Surface", isOn: $frozen.surface); Toggle("Freeze Traversal", isOn: $frozen.traversal); Toggle("Freeze Articulation", isOn: $frozen.articulation); Toggle("Freeze Lanes", isOn: $frozen.lanes)
     Button("Generate 3 Local Variations", action: generate).buttonStyle(.borderedProminent)
     if proposals.isEmpty == false {
       Text("A small deterministic set — none is ranked or saved.").font(.caption2).foregroundStyle(.secondary)

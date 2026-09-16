@@ -8,12 +8,20 @@ enum ProposalPatchField: String, Codable, CaseIterable {
   case terrainDetail, terrainZoom
   case traversalRadiusX, traversalRadiusY, traversalTranslationX
   case attackSeconds, releaseSeconds, gain
+  case droneEnabled, droneDensity, droneRange, dronePattern, droneSeedOffset
+  case padEnabled, padDensity, padRange, padPattern, padSeedOffset
+  case motifAEnabled, motifADensity, motifARange, motifAPattern, motifASeedOffset
+  case motifBEnabled, motifBDensity, motifBRange, motifBPattern, motifBSeedOffset
 
   var component: String {
     switch self {
     case .terrainDetail, .terrainZoom: "Surface"
     case .traversalRadiusX, .traversalRadiusY, .traversalTranslationX: "Traversal"
     case .attackSeconds, .releaseSeconds, .gain: "Articulation"
+    case .droneEnabled, .droneDensity, .droneRange, .dronePattern, .droneSeedOffset,
+         .padEnabled, .padDensity, .padRange, .padPattern, .padSeedOffset,
+         .motifAEnabled, .motifADensity, .motifARange, .motifAPattern, .motifASeedOffset,
+         .motifBEnabled, .motifBDensity, .motifBRange, .motifBPattern, .motifBSeedOffset: "Lanes"
     }
   }
 
@@ -23,6 +31,29 @@ enum ProposalPatchField: String, Codable, CaseIterable {
     case .attackSeconds: 0.001...1
     case .releaseSeconds: 0.001...2
     case .gain: 0...1.5
+    case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled: 0...1
+    case .droneDensity, .droneRange, .padDensity, .padRange, .motifADensity, .motifARange, .motifBDensity, .motifBRange: 0...1
+    case .dronePattern, .padPattern, .motifAPattern, .motifBPattern: 0...3
+    case .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset: 0...9999
+    }
+  }
+
+  var roleIndex: Int? {
+    switch self {
+    case .droneEnabled, .droneDensity, .droneRange, .dronePattern, .droneSeedOffset: 0
+    case .padEnabled, .padDensity, .padRange, .padPattern, .padSeedOffset: 1
+    case .motifAEnabled, .motifADensity, .motifARange, .motifAPattern, .motifASeedOffset: 2
+    case .motifBEnabled, .motifBDensity, .motifBRange, .motifBPattern, .motifBSeedOffset: 3
+    default: nil
+    }
+  }
+
+  var requiresWholeNumber: Bool {
+    switch self {
+    case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled,
+         .dronePattern, .padPattern, .motifAPattern, .motifBPattern,
+         .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset: true
+    default: false
     }
   }
 }
@@ -67,16 +98,28 @@ struct AgentProposalReceiptV1: Codable, Equatable, Identifiable {
 
 struct ValidatedAgentProposal: Equatable {
   let proposal: ScenePatchProposalV1
-  let candidate: SceneEditorControls
+  let editorCandidate: SceneEditorControls
+  let roleCandidate: [RoleControl]
 }
 
 enum LocalProposalIntent: String, CaseIterable, Identifiable {
   case surfaceLift = "Surface Lift"
   case orbitPath = "Orbit Path"
   case softArrival = "Soft Arrival"
+  case droneFoundation = "Drone Foundation"
+  case motifPulse = "Motif Pulse"
   var id: String { rawValue }
+  /// Contract IDs are deliberately independent of the artist-facing label.
+  /// Keep them ASCII-safe so local and external providers obey the exact same
+  /// identity rule.
+  var proposalSlug: String { rawValue.lowercased().replacingOccurrences(of: " ", with: "-") }
   var component: String {
-    switch self { case .surfaceLift: "Surface"; case .orbitPath: "Traversal"; case .softArrival: "Articulation" }
+    switch self {
+    case .surfaceLift: "Surface"
+    case .orbitPath: "Traversal"
+    case .softArrival: "Articulation"
+    case .droneFoundation, .motifPulse: "Lanes"
+    }
   }
 }
 
@@ -87,9 +130,11 @@ enum LocalProposalProvider {
     case .surfaceLift: [ProposalPatchV1(field: .terrainDetail, value: 0.68), ProposalPatchV1(field: .terrainZoom, value: 0.42)]
     case .orbitPath: [ProposalPatchV1(field: .traversalRadiusX, value: 0.72), ProposalPatchV1(field: .traversalRadiusY, value: 0.38)]
     case .softArrival: [ProposalPatchV1(field: .attackSeconds, value: 0.045), ProposalPatchV1(field: .releaseSeconds, value: 0.38)]
+    case .droneFoundation: [ProposalPatchV1(field: .droneEnabled, value: 1), ProposalPatchV1(field: .droneDensity, value: 0.30), ProposalPatchV1(field: .droneRange, value: 0.18), ProposalPatchV1(field: .dronePattern, value: 0)]
+    case .motifPulse: [ProposalPatchV1(field: .motifAEnabled, value: 1), ProposalPatchV1(field: .motifADensity, value: 0.72), ProposalPatchV1(field: .motifARange, value: 0.58), ProposalPatchV1(field: .motifAPattern, value: 3)]
     }
     return ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema,
-                                proposalID: "local-\(intent.id)-\(String(sceneHash.prefix(12)))",
+                                proposalID: "local-\(intent.proposalSlug)-\(String(sceneHash.prefix(12)))",
                                 provider: "latticewake-local-palette-v1",
                                 baseSceneSHA256: sceneHash,
                                 frozenComponents: frozen.names.sorted(), patches: patches)
@@ -146,18 +191,29 @@ enum ProposalContractV1 {
     try JSONDecoder().decode(ScenePatchProposalV1.self, from: bytes)
   }
 
+  /// Compatibility helper for callers that only permit Surface, Traversal, or
+  /// Articulation patches. Lane patches need the current role controls and use
+  /// `validatedProposal` below.
   static func validatedCandidate(_ proposal: ScenePatchProposalV1, base: SceneEditorControls,
                                  sceneHash: String, frozen: FrozenComponents) throws -> SceneEditorControls {
+    let validated = try validatedProposal(proposal, base: base, roles: [], sceneHash: sceneHash, frozen: frozen)
+    return validated.editorCandidate
+  }
+
+  static func validatedProposal(_ proposal: ScenePatchProposalV1, base: SceneEditorControls,
+                                roles: [RoleControl], sceneHash: String,
+                                frozen: FrozenComponents) throws -> ValidatedAgentProposal {
     guard proposal.schemaVersion == ScenePatchProposalV1.schema else { throw ProposalContractError.schema }
     guard validIdentity(proposal.proposalID) else { throw ProposalContractError.identity("id") }
     guard validIdentity(proposal.provider) else { throw ProposalContractError.identity("provider") }
     guard proposal.baseSceneSHA256 == sceneHash else { throw ProposalContractError.baseScene }
     guard Set(proposal.frozenComponents) == frozen.names else { throw ProposalContractError.frozenState }
     guard (1...16).contains(proposal.patches.count) else { throw ProposalContractError.patchCount }
-    var candidate = base; var fields = Set<ProposalPatchField>()
+    var candidate = base; var roleCandidate = roles; var fields = Set<ProposalPatchField>()
     for patch in proposal.patches {
       guard fields.insert(patch.field).inserted else { throw ProposalContractError.duplicateField }
-      guard patch.value.isFinite, patch.field.range.contains(patch.value) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+      guard patch.value.isFinite, patch.field.range.contains(patch.value),
+            !patch.field.requiresWholeNumber || patch.value.rounded() == patch.value else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
       guard !frozen.names.contains(patch.field.component) else { throw ProposalContractError.frozenField(patch.field.component) }
       switch patch.field {
       case .terrainDetail: candidate.terrainDetail = patch.value
@@ -168,9 +224,24 @@ enum ProposalContractV1 {
       case .attackSeconds: candidate.attackSeconds = patch.value
       case .releaseSeconds: candidate.releaseSeconds = patch.value
       case .gain: candidate.gain = patch.value
+      case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled:
+        guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+        roleCandidate[roleIndex].enabled = patch.value == 1
+      case .droneDensity, .padDensity, .motifADensity, .motifBDensity:
+        guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+        roleCandidate[roleIndex].density = patch.value
+      case .droneRange, .padRange, .motifARange, .motifBRange:
+        guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+        roleCandidate[roleIndex].range = patch.value
+      case .dronePattern, .padPattern, .motifAPattern, .motifBPattern:
+        guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+        roleCandidate[roleIndex].pattern = Int(patch.value)
+      case .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset:
+        guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+        roleCandidate[roleIndex].seedOffset = UInt64(patch.value)
       }
     }
-    return candidate
+    return ValidatedAgentProposal(proposal: proposal, editorCandidate: candidate, roleCandidate: roleCandidate)
   }
 
   static func fixtureJSON(sceneHash: String, frozen: FrozenComponents) throws -> String? {
@@ -181,6 +252,10 @@ enum ProposalContractV1 {
     case .attackSeconds: 0.04
     case .releaseSeconds: 0.32
     case .gain: 0.8
+    case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled: 1
+    case .droneDensity, .droneRange, .padDensity, .padRange, .motifADensity, .motifARange, .motifBDensity, .motifBRange: 0.5
+    case .dronePattern, .padPattern, .motifAPattern, .motifBPattern: 0
+    case .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset: 0
     }
     let proposal = ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema,
                                         proposalID: "local-fixture-\(String(sceneHash.prefix(12)))",
@@ -199,6 +274,8 @@ enum ProposalContractV1 {
 
 extension FrozenComponents {
   var names: Set<String> {
-    [surface ? "Surface" : nil, traversal ? "Traversal" : nil, articulation ? "Articulation" : nil].compactMap { $0 }.reduce(into: Set<String>()) { $0.insert($1) }
+    [surface ? "Surface" : nil, traversal ? "Traversal" : nil,
+     articulation ? "Articulation" : nil, lanes ? "Lanes" : nil]
+      .compactMap { $0 }.reduce(into: Set<String>()) { $0.insert($1) }
   }
 }
