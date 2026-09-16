@@ -190,7 +190,7 @@ static unsigned int rolePatternIndex(const unsigned int roleIndex, const lattice
   // rewriting it to Held when the role controls are round-tripped.
   return 3U;
 }
-int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,rolePatternIndex(roleIndex,role)};return 1; }
+int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),static_cast<float>(role.variation),role.seedOffset,rolePatternIndex(roleIndex,role)};return 1; }
 static bool applyRolePattern(const unsigned int roleIndex, const unsigned int pattern, latticewake::RoleLane& role) {
   switch(pattern) {
     case 0: role.pattern={0}; role.rhythm={{latticewake::RhythmStepKind::note}}; return true;
@@ -220,13 +220,13 @@ static bool applyRolePattern(const unsigned int roleIndex, const unsigned int pa
   return false;
 }
 int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,const LWRoleControl* control,char** canonicalJson) {
-  if(!json||!control||!canonicalJson||control->pattern>7U)return 0;
+  if(!json||!control||!canonicalJson||control->pattern>7U||!std::isfinite(control->variation)||control->variation<0.0F||control->variation>1.0F)return 0;
   latticewake::SceneSerializationError error;
   auto v1=latticewake::parseSceneV1(json,error);
   auto scene=v1?std::optional<latticewake::Scene>(v1->compatibilityScene):latticewake::parseSceneV0(json,error);
   if(!scene||roleIndex>=scene->roles.size())return 0;
   auto& role=scene->roles[roleIndex];
-  role.enabled=control->enabled!=0;role.range=control->range;role.density=control->density;role.seedOffset=control->seed_offset;
+  role.enabled=control->enabled!=0;role.range=control->range;role.density=control->density;role.variation=control->variation;role.seedOffset=control->seed_offset;
   if(!applyRolePattern(roleIndex,control->pattern,role))return 0;
   std::optional<std::string> serialized;
   if(v1){v1->compatibilityScene=*scene;v1->lanes[roleIndex].role=role;serialized=latticewake::serializeSceneV1(*v1,error);}

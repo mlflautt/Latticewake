@@ -5,6 +5,7 @@ private struct BridgeRoleControl {
   var enabled: UInt32 = 1
   var range: Float = 0.5
   var density: Float = 0.5
+  var variation: Float = 0
   var seedOffset: UInt64 = 0
   var pattern: UInt32 = 0
 }
@@ -23,6 +24,7 @@ struct RoleControl: Identifiable, Equatable {
   var enabled: Bool
   var range: Double
   var density: Double
+  var variation: Double
   var seedOffset: UInt64
   var pattern: Int
   static let names = ["Drone", "Pad", "Motif A", "Motif B"]
@@ -45,7 +47,7 @@ enum RoleSceneBridge {
         throw NSError(domain: "Latticewake", code: 21)
       }
       return RoleControl(id: index, enabled: control.enabled != 0, range: Double(control.range),
-                         density: Double(control.density), seedOffset: control.seedOffset,
+                         density: Double(control.density), variation: Double(control.variation), seedOffset: control.seedOffset,
                          pattern: Int(control.pattern))
     }
   }
@@ -55,7 +57,7 @@ enum RoleSceneBridge {
     for control in controls {
       guard let json = String(data: result, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 22) }
       var bridge = BridgeRoleControl(enabled: control.enabled ? 1 : 0, range: Float(control.range),
-                                     density: Float(control.density), seedOffset: control.seedOffset,
+                                     density: Float(control.density), variation: Float(control.variation), seedOffset: control.seedOffset,
                                      pattern: UInt32(control.pattern))
       var output: UnsafeMutablePointer<CChar>?
       let success = json.withCString { source in
@@ -92,6 +94,8 @@ struct RoleControlsView: View {
             Slider(value: $control.density, in: 0...1)
             Text("Range").font(.caption)
             Slider(value: $control.range, in: 0...1)
+            Text("Variation").font(.caption)
+            Slider(value: $control.variation, in: 0...1)
             Stepper("Seed \(control.seedOffset)", value: $control.seedOffset, in: 0...9999)
               .font(.caption).frame(width: 112)
           }

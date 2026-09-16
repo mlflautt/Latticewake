@@ -9,19 +9,23 @@ enum ProposalPatchField: String, Codable, CaseIterable {
   case traversalRadiusX, traversalRadiusY, traversalTranslationX
   case attackSeconds, releaseSeconds, gain
   case droneEnabled, droneDensity, droneRange, dronePattern, droneSeedOffset
+  case droneVariation
   case padEnabled, padDensity, padRange, padPattern, padSeedOffset
+  case padVariation
   case motifAEnabled, motifADensity, motifARange, motifAPattern, motifASeedOffset
+  case motifAVariation
   case motifBEnabled, motifBDensity, motifBRange, motifBPattern, motifBSeedOffset
+  case motifBVariation
 
   var component: String {
     switch self {
     case .terrainDetail, .terrainZoom: "Surface"
     case .traversalRadiusX, .traversalRadiusY, .traversalTranslationX: "Traversal"
     case .attackSeconds, .releaseSeconds, .gain: "Articulation"
-    case .droneEnabled, .droneDensity, .droneRange, .dronePattern, .droneSeedOffset,
-         .padEnabled, .padDensity, .padRange, .padPattern, .padSeedOffset,
-         .motifAEnabled, .motifADensity, .motifARange, .motifAPattern, .motifASeedOffset,
-         .motifBEnabled, .motifBDensity, .motifBRange, .motifBPattern, .motifBSeedOffset: "Lanes"
+    case .droneEnabled, .droneDensity, .droneRange, .dronePattern, .droneSeedOffset, .droneVariation,
+         .padEnabled, .padDensity, .padRange, .padPattern, .padSeedOffset, .padVariation,
+         .motifAEnabled, .motifADensity, .motifARange, .motifAPattern, .motifASeedOffset, .motifAVariation,
+         .motifBEnabled, .motifBDensity, .motifBRange, .motifBPattern, .motifBSeedOffset, .motifBVariation: "Lanes"
     }
   }
 
@@ -32,7 +36,7 @@ enum ProposalPatchField: String, Codable, CaseIterable {
     case .releaseSeconds: 0.001...2
     case .gain: 0...1.5
     case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled: 0...1
-    case .droneDensity, .droneRange, .padDensity, .padRange, .motifADensity, .motifARange, .motifBDensity, .motifBRange: 0...1
+    case .droneDensity, .droneRange, .droneVariation, .padDensity, .padRange, .padVariation, .motifADensity, .motifARange, .motifAVariation, .motifBDensity, .motifBRange, .motifBVariation: 0...1
     case .dronePattern, .padPattern: 0...3
     case .motifAPattern, .motifBPattern: 0...7
     case .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset: 0...9999
@@ -41,10 +45,10 @@ enum ProposalPatchField: String, Codable, CaseIterable {
 
   var roleIndex: Int? {
     switch self {
-    case .droneEnabled, .droneDensity, .droneRange, .dronePattern, .droneSeedOffset: 0
-    case .padEnabled, .padDensity, .padRange, .padPattern, .padSeedOffset: 1
-    case .motifAEnabled, .motifADensity, .motifARange, .motifAPattern, .motifASeedOffset: 2
-    case .motifBEnabled, .motifBDensity, .motifBRange, .motifBPattern, .motifBSeedOffset: 3
+    case .droneEnabled, .droneDensity, .droneRange, .dronePattern, .droneSeedOffset, .droneVariation: 0
+    case .padEnabled, .padDensity, .padRange, .padPattern, .padSeedOffset, .padVariation: 1
+    case .motifAEnabled, .motifADensity, .motifARange, .motifAPattern, .motifASeedOffset, .motifAVariation: 2
+    case .motifBEnabled, .motifBDensity, .motifBRange, .motifBPattern, .motifBSeedOffset, .motifBVariation: 3
     default: nil
     }
   }
@@ -135,8 +139,8 @@ enum LocalProposalProvider {
     case .softArrival: [ProposalPatchV1(field: .attackSeconds, value: 0.045), ProposalPatchV1(field: .releaseSeconds, value: 0.38)]
     case .droneFoundation: [ProposalPatchV1(field: .droneEnabled, value: 1), ProposalPatchV1(field: .droneDensity, value: 0.30), ProposalPatchV1(field: .droneRange, value: 0.18), ProposalPatchV1(field: .dronePattern, value: 0)]
     case .motifPulse: [ProposalPatchV1(field: .motifAEnabled, value: 1), ProposalPatchV1(field: .motifADensity, value: 0.72), ProposalPatchV1(field: .motifARange, value: 0.58), ProposalPatchV1(field: .motifAPattern, value: 3)]
-    case .motifEuclid: [ProposalPatchV1(field: .motifAEnabled, value: 1), ProposalPatchV1(field: .motifADensity, value: 0.68), ProposalPatchV1(field: .motifARange, value: 0.55), ProposalPatchV1(field: .motifAPattern, value: 5)]
-    case .motifCell: [ProposalPatchV1(field: .motifBEnabled, value: 1), ProposalPatchV1(field: .motifBDensity, value: 0.64), ProposalPatchV1(field: .motifBRange, value: 0.62), ProposalPatchV1(field: .motifBPattern, value: 4)]
+    case .motifEuclid: [ProposalPatchV1(field: .motifAEnabled, value: 1), ProposalPatchV1(field: .motifADensity, value: 0.68), ProposalPatchV1(field: .motifARange, value: 0.55), ProposalPatchV1(field: .motifAPattern, value: 5), ProposalPatchV1(field: .motifAVariation, value: 0.30)]
+    case .motifCell: [ProposalPatchV1(field: .motifBEnabled, value: 1), ProposalPatchV1(field: .motifBDensity, value: 0.64), ProposalPatchV1(field: .motifBRange, value: 0.62), ProposalPatchV1(field: .motifBPattern, value: 4), ProposalPatchV1(field: .motifBVariation, value: 0.45)]
     }
     return ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema,
                                 proposalID: "local-\(intent.proposalSlug)-\(String(sceneHash.prefix(12)))",
@@ -238,6 +242,9 @@ enum ProposalContractV1 {
       case .droneRange, .padRange, .motifARange, .motifBRange:
         guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
         roleCandidate[roleIndex].range = patch.value
+      case .droneVariation, .padVariation, .motifAVariation, .motifBVariation:
+        guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
+        roleCandidate[roleIndex].variation = patch.value
       case .dronePattern, .padPattern, .motifAPattern, .motifBPattern:
         guard let roleIndex = patch.field.roleIndex, roleCandidate.indices.contains(roleIndex) else { throw ProposalContractError.invalidValue(patch.field.rawValue) }
         roleCandidate[roleIndex].pattern = Int(patch.value)
@@ -258,7 +265,7 @@ enum ProposalContractV1 {
     case .releaseSeconds: 0.32
     case .gain: 0.8
     case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled: 1
-    case .droneDensity, .droneRange, .padDensity, .padRange, .motifADensity, .motifARange, .motifBDensity, .motifBRange: 0.5
+    case .droneDensity, .droneRange, .droneVariation, .padDensity, .padRange, .padVariation, .motifADensity, .motifARange, .motifAVariation, .motifBDensity, .motifBRange, .motifBVariation: 0.5
     case .dronePattern, .padPattern, .motifAPattern, .motifBPattern: 0
     case .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset: 0
     }

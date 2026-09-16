@@ -32,6 +32,7 @@ typedef struct LWRoleControl {
   unsigned int enabled;
   float range;
   float density;
+  float variation;
   unsigned long long seed_offset;
   unsigned int pattern;
 } LWRoleControl;

@@ -320,6 +320,7 @@ final class LatticewakeAppTests: XCTestCase {
                                                               roles: baseRoles, sceneHash: hash, frozen: .init())
     XCTAssertEqual(validated.roleCandidate[2].pattern, 5)
     XCTAssertEqual(validated.roleCandidate[2].density, 0.68, accuracy: 0.0001)
+    XCTAssertEqual(validated.roleCandidate[2].variation, 0.30, accuracy: 0.0001)
     let editorApplied = try SceneEditorBridge.apply(validated.editorCandidate, to: baseBytes)
     let applied = try RoleSceneBridge.apply(validated.roleCandidate, to: editorApplied)
     let roundTripped = try RoleSceneBridge.controls(from: applied)[2]
@@ -328,6 +329,7 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(roundTripped.seedOffset, validated.roleCandidate[2].seedOffset)
     XCTAssertEqual(roundTripped.density, validated.roleCandidate[2].density, accuracy: 0.0001)
     XCTAssertEqual(roundTripped.range, validated.roleCandidate[2].range, accuracy: 0.0001)
+    XCTAssertEqual(roundTripped.variation, validated.roleCandidate[2].variation, accuracy: 0.0001)
     XCTAssertThrowsError(try ProposalContractV1.validatedProposal(proposal, base: .init(), roles: baseRoles,
                                                                     sceneHash: hash,
                                                                     frozen: .init(lanes: true)))
@@ -339,7 +341,8 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(Array(RoleControl.patterns(for: 2).suffix(4)), ["Euclid 3/8", "Euclid 5/8", "Euclid 7/8", "Offbeat"])
     XCTAssertEqual(Array(RoleControl.patterns(for: 3).suffix(4)), ["Cellular", "Rotate 5", "Recursive", "Coprime"])
     let proposal = try XCTUnwrap(LocalProposalProvider.propose(intent: .motifCell, sceneHash: "scene", frozen: .init()))
-    XCTAssertEqual(proposal.patches.last, ProposalPatchV1(field: .motifBPattern, value: 4))
+    XCTAssertTrue(proposal.patches.contains(ProposalPatchV1(field: .motifBPattern, value: 4)))
+    XCTAssertTrue(proposal.patches.contains(ProposalPatchV1(field: .motifBVariation, value: 0.45)))
   }
 
   func testProposalFixtureDrivesValidateAcceptUndoReceiptPath() throws {

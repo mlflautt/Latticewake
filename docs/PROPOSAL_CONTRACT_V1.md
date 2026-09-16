@@ -22,7 +22,7 @@ temporary candidate. The initial fields are Surface (`terrainDetail`,
 `traversalTranslationX`), Articulation (`attackSeconds`, `releaseSeconds`,
 `gain`), and the four initial role/lane controls. Role fields use an explicit
 role prefix (`drone`, `pad`, `motifA`, or `motifB`) followed by `Enabled`,
-`Density`, `Range`, `Pattern`, or `SeedOffset`. `Enabled`, `Pattern`, and
+`Density`, `Range`, `Variation`, `Pattern`, or `SeedOffset`. `Enabled`, `Pattern`, and
 `SeedOffset` must be whole numeric values in their documented bounds.
 Drone and Pad pattern indexes are deliberately capped at `0...3`; Motif A and
 Motif B add four bounded role-specific families at `4...7`. These indexes are
@@ -59,3 +59,9 @@ Motif B adds Cellular, Rotate 5, Recursive, and Coprime forms. Each resolves
 to a finite degree and rhythm sequence during preparation, then contributes to
 the ordinary deterministic role trace. No generator runs in the audio
 callback, and no form is asserted to be aesthetically preferable.
+
+`Variation` is a normalized lane value. Zero preserves the literal degree
+sequence. A non-zero amount deterministically chooses bounded neighbouring
+degrees from the scene seed plus lane seed; values above 0.5 widen that bound
+by one additional degree. It is not random at playback time and remains fully
+replayable from the saved scene.

@@ -384,6 +384,22 @@ void testFourRoleEventGeneration() {
     assert(event.payload.at("lane") != "pad");
   }
 
+  // A non-zero variation depth changes only deterministic degree selection;
+  // the same scene/seed/depth must remain exactly replayable.
+  Scene fixedVariation = validScene();
+  for (auto& role : fixedVariation.roles) role.enabled = false;
+  fixedVariation.roles[2].enabled = true;
+  fixedVariation.roles[2].pattern = {0};
+  fixedVariation.roles[2].rhythm = {{RhythmStepKind::note}};
+  fixedVariation.roles[2].variation = 0.0;
+  const auto fixed = generateRoleEvents(fixedVariation, 0, 48000, transport, error);
+  fixedVariation.roles[2].variation = 0.75;
+  const auto varied = generateRoleEvents(fixedVariation, 0, 48000, transport, error);
+  const auto variedAgain = generateRoleEvents(fixedVariation, 0, 48000, transport, error);
+  assert(fixed.has_value() && varied.has_value() && variedAgain.has_value());
+  assert(fixed->canonicalBytes() != varied->canonicalBytes());
+  assert(varied->canonicalBytes() == variedAgain->canonicalBytes());
+
   for (auto& role : scene.roles) role.enabled = false;
   const auto silent = generateRoleEvents(scene, 0, 48000, transport, error);
   assert(silent.has_value() && silent->events().empty());

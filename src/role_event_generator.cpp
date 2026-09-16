@@ -13,7 +13,17 @@ bool validTransport(const SampleTransportConfig& config) { return std::isfinite(
 double beatAt(const std::uint64_t sample, const SampleTransportConfig& config) { return static_cast<double>(sample) * config.tempoBPM / (60.0 * config.sampleRate); }
 std::uint64_t sampleAt(const double beat, const SampleTransportConfig& config) { return static_cast<std::uint64_t>(std::round(beat * 60.0 * config.sampleRate / config.tempoBPM)); }
 std::uint64_t mix(std::uint64_t value) { value ^= value >> 30U; value *= 0xbf58476d1ce4e5b9ULL; value ^= value >> 27U; value *= 0x94d049bb133111ebULL; return value ^ (value >> 31U); }
-int degreeFor(const RoleLane& role, const std::uint64_t seed, const std::size_t index) { if(role.pattern.empty()) return 0; const std::uint64_t state=mix(seed+index); const std::size_t base=index%role.pattern.size(); const int variation=role.variation==0.0?0:static_cast<int>(state%3U)-1; return role.pattern[base]+variation; }
+int degreeFor(const RoleLane& role, const std::uint64_t seed, const std::size_t index) {
+  if(role.pattern.empty()) return 0;
+  const std::uint64_t state=mix(seed+index);
+  const std::size_t base=index%role.pattern.size();
+  // Variation remains deterministic but now has a bounded depth: any armed
+  // amount introduces neighbouring degrees; values above 0.5 may reach two
+  // degrees either side. Zero is an exact no-variation replay contract.
+  const int spread=role.variation==0.0?0:(role.variation<=0.5?1:2);
+  const int variation=spread==0?0:static_cast<int>(state%static_cast<std::uint64_t>(spread*2+1))-spread;
+  return role.pattern[base]+variation;
+}
 }  // namespace
 
 std::optional<EventTrace> generateRoleEvents(
