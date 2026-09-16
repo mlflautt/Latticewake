@@ -26,6 +26,7 @@ struct ContentView: View {
   @State private var growDepth: GrowDepth = .related
   @State private var frozenComponents = FrozenComponents()
   @State private var growProposal: GrowProposal?
+  @State private var acceptedGrowReceipts: [GrowProposalReceiptV1] = []
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
   @State private var libraryOpen = false
@@ -106,6 +107,7 @@ struct ContentView: View {
             StageDrawer(title: "Library", color: .cyan) {
               Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
               GrowControlsView(depth: $growDepth, frozen: $frozenComponents, proposal: growProposal, generate: generateGrow, preview: previewGrow, accept: acceptGrow, reject: { growProposal = nil })
+              if let receipt = acceptedGrowReceipts.last { Text("Accepted variations: \(acceptedGrowReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
               Button("Close Library") { libraryOpen = false }.font(.caption)
               Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
             }
@@ -200,7 +202,16 @@ struct ContentView: View {
   }
   private func generateGrow() { growProposal = GrowEngine.propose(base: editorControls, sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256, depth: growDepth, frozen: frozenComponents) }
   private func previewGrow() { guard let growProposal else { return }; do { try previewTemporary(SceneEditorBridge.apply(growProposal.candidate, to: sceneBytes), label: "Grow preview") } catch { self.error = error.localizedDescription } }
-  private func acceptGrow() { guard let growProposal else { return }; editorControls = growProposal.candidate; applyEditorChanges(); self.growProposal = nil }
+  private func acceptGrow() {
+    guard let growProposal else { return }
+    do {
+      let candidate = try SceneEditorBridge.apply(growProposal.candidate, to: sceneBytes)
+      let proposalReceipt = GrowProposalReceiptV1(proposal: growProposal, candidateSceneSHA256: SceneLibrary.receipt(for: candidate).sha256)
+      try installScene(candidate, url: sceneURL, recordUndo: true, dirty: true)
+      acceptedGrowReceipts.append(proposalReceipt)
+      self.growProposal = nil
+    } catch { self.error = error.localizedDescription }
+  }
 
   private func previewEditorChanges() {
     do { try previewTemporary(SceneEditorBridge.apply(editorControls, to: sceneBytes), label: "Candidate preview") }
@@ -237,7 +248,7 @@ struct ContentView: View {
   }
 
   private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool) throws {
-    if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes) }
+    if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts) }
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
     roles = try RoleSceneBridge.controls(from: bytes)
@@ -267,7 +278,7 @@ struct ContentView: View {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
       let migrated = try SceneDocumentBridge.canonicalV1(from: sceneBytes)
-      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance)
+      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance, acceptedGrowReceipts: acceptedGrowReceipts)
       let saved = try SceneLibrary.save(document, to: url)
       sceneBytes = migrated; sceneURL = url; isDirty = false
       receipt = "Saved Scene v1 \(String(saved.sha256.prefix(12)))"
@@ -282,6 +293,7 @@ struct ContentView: View {
     do {
       let loaded = try SceneLibrary.load(from: url)
       performance = loaded.performance
+      acceptedGrowReceipts = loaded.acceptedGrowReceipts
       try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false)
       receipt = "Loaded \(loaded.originalSceneV0 ? "Scene v0" : "Library v1") \(String(loaded.receipt.sha256.prefix(12)))"
     } catch { self.error = error.localizedDescription }
@@ -289,7 +301,7 @@ struct ContentView: View {
 
   private func undo() {
     guard let previous = undoHistory.undo() else { return }
-    do { try installScene(previous, url: sceneURL, recordUndo: false, dirty: true) }
+    do { acceptedGrowReceipts = previous.acceptedGrowReceipts; try installScene(previous.sceneBytes, url: sceneURL, recordUndo: false, dirty: true) }
     catch { self.error = error.localizedDescription }
   }
 

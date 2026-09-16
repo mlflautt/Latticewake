@@ -5,7 +5,33 @@ enum GrowDepth: String, CaseIterable, Identifiable { case subtle = "Subtle", rel
   var amplitude: Double { switch self { case .subtle: 0.08; case .related: 0.20; case .exploratory: 0.36 } }
 }
 struct FrozenComponents: Equatable { var surface = false; var traversal = false; var articulation = false }
-struct GrowProposal: Identifiable, Equatable { let id: String; let seed: UInt64; let depth: GrowDepth; let frozen: FrozenComponents; let candidate: SceneEditorControls; let changed: [String] }
+struct GrowProposal: Identifiable, Equatable { let id: String; let baseSceneHash: String; let seed: UInt64; let depth: GrowDepth; let frozen: FrozenComponents; let candidate: SceneEditorControls; let changed: [String] }
+
+struct GrowProposalReceiptV1: Codable, Equatable, Identifiable {
+  static let schema = "latticewake-grow-receipt-v1"
+  let schemaVersion: String
+  let proposalID: String
+  let provider: String
+  let baseSceneSHA256: String
+  let candidateSceneSHA256: String
+  let seed: UInt64
+  let depth: String
+  let frozenComponents: [String]
+  let changedComponents: [String]
+  var id: String { proposalID }
+
+  init(proposal: GrowProposal, candidateSceneSHA256: String) {
+    schemaVersion = Self.schema
+    proposalID = proposal.id
+    provider = "local-freeze-grow-v1"
+    baseSceneSHA256 = proposal.baseSceneHash
+    self.candidateSceneSHA256 = candidateSceneSHA256
+    seed = proposal.seed
+    depth = proposal.depth.rawValue
+    frozenComponents = [proposal.frozen.surface ? "Surface" : nil, proposal.frozen.traversal ? "Traversal" : nil, proposal.frozen.articulation ? "Articulation" : nil].compactMap { $0 }
+    changedComponents = proposal.changed
+  }
+}
 
 enum GrowEngine {
   static func propose(base: SceneEditorControls, sceneHash: String, depth: GrowDepth, frozen: FrozenComponents) -> GrowProposal {
@@ -19,7 +45,7 @@ enum GrowEngine {
     if !frozen.surface { candidate.terrainDetail = bounded(base.terrainDetail + delta(depth.amplitude), 0...1); candidate.terrainZoom = bounded(base.terrainZoom + delta(depth.amplitude), 0...1); changed.append("Surface") }
     if !frozen.traversal { candidate.traversalRadiusX = bounded(base.traversalRadiusX + delta(depth.amplitude), 0...1); candidate.traversalRadiusY = bounded(base.traversalRadiusY + delta(depth.amplitude), 0...1); candidate.traversalTranslationX = bounded(base.traversalTranslationX + delta(depth.amplitude), 0...1); changed.append("Traversal") }
     if !frozen.articulation { candidate.attackSeconds = bounded(base.attackSeconds + delta(depth.amplitude * 0.3), 0.001...1); candidate.releaseSeconds = bounded(base.releaseSeconds + delta(depth.amplitude), 0.001...2); candidate.gain = bounded(base.gain + delta(depth.amplitude), 0...1.5); changed.append("Articulation") }
-    return GrowProposal(id: "local-\(seed)", seed: seed, depth: depth, frozen: frozen, candidate: candidate, changed: changed)
+    return GrowProposal(id: "local-\(seed)", baseSceneHash: sceneHash, seed: seed, depth: depth, frozen: frozen, candidate: candidate, changed: changed)
   }
 }
 

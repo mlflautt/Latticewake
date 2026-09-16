@@ -22,7 +22,7 @@ sanitizer:
 	/tmp/latticewake-sanitized/playable_tests
 
 swift-test:
-	cd app && swift test
+	cd app && env CLANG_MODULE_CACHE_PATH=/tmp/latticewake-clang-cache SWIFTPM_MODULECACHE_OVERRIDE=/tmp/latticewake-swiftpm-cache swift test --disable-sandbox
 
 scripts-check:
 	zsh -n scripts/triage_macos_crash.sh

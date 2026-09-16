@@ -33,11 +33,22 @@ struct SceneLibraryDocumentV1: Codable, Equatable {
   let schemaVersion: String
   var sceneJSON: String
   var performance: PerformanceSettingsV1
+  var acceptedGrowReceipts: [GrowProposalReceiptV1]
 
-  init(sceneJSON: String, performance: PerformanceSettingsV1 = .init()) {
+  init(sceneJSON: String, performance: PerformanceSettingsV1 = .init(), acceptedGrowReceipts: [GrowProposalReceiptV1] = []) {
     self.schemaVersion = Self.schema
     self.sceneJSON = sceneJSON
     self.performance = performance
+    self.acceptedGrowReceipts = acceptedGrowReceipts
+  }
+
+  enum CodingKeys: String, CodingKey { case schemaVersion, sceneJSON, performance, acceptedGrowReceipts }
+  init(from decoder: Decoder) throws {
+    let values = try decoder.container(keyedBy: CodingKeys.self)
+    schemaVersion = try values.decode(String.self, forKey: .schemaVersion)
+    sceneJSON = try values.decode(String.self, forKey: .sceneJSON)
+    performance = try values.decode(PerformanceSettingsV1.self, forKey: .performance)
+    acceptedGrowReceipts = try values.decodeIfPresent([GrowProposalReceiptV1].self, forKey: .acceptedGrowReceipts) ?? []
   }
 }
 
@@ -46,6 +57,7 @@ struct LoadedSceneDocument: Equatable {
   let performance: PerformanceSettingsV1
   let originalSceneV0: Bool
   let receipt: SceneReceipt
+  let acceptedGrowReceipts: [GrowProposalReceiptV1]
 }
 
 enum SceneLibrary {
@@ -61,9 +73,9 @@ enum SceneLibrary {
       try document.performance.validate()
       let canonicalScene = try canonicalSceneV1(document.sceneJSON)
       return LoadedSceneDocument(sceneBytes: canonicalScene, performance: document.performance,
-                                 originalSceneV0: false, receipt: receipt)
+                                 originalSceneV0: false, receipt: receipt, acceptedGrowReceipts: document.acceptedGrowReceipts)
     }
-    return LoadedSceneDocument(sceneBytes: bytes, performance: .init(), originalSceneV0: true, receipt: receipt)
+    return LoadedSceneDocument(sceneBytes: bytes, performance: .init(), originalSceneV0: true, receipt: receipt, acceptedGrowReceipts: [])
   }
 
   @discardableResult static func save(_ document: SceneLibraryDocumentV1, to url: URL) throws -> SceneReceipt {
@@ -71,7 +83,8 @@ enum SceneLibrary {
     let canonicalScene = try canonicalSceneV1(document.sceneJSON)
     let preparedDocument = SceneLibraryDocumentV1(
       sceneJSON: String(decoding: canonicalScene, as: UTF8.self),
-      performance: document.performance
+      performance: document.performance,
+      acceptedGrowReceipts: document.acceptedGrowReceipts
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -92,17 +105,22 @@ enum SceneLibrary {
   }
 }
 
+struct SceneUndoEntry {
+  let sceneBytes: Data
+  let acceptedGrowReceipts: [GrowProposalReceiptV1]
+}
+
 struct SceneUndoHistory {
-  private var entries: [Data] = []
+  private var entries: [SceneUndoEntry] = []
   private let capacity = 32
 
   var canUndo: Bool { !entries.isEmpty }
 
-  mutating func record(_ bytes: Data) {
-    guard entries.last != bytes else { return }
-    entries.append(bytes)
+  mutating func record(_ bytes: Data, acceptedGrowReceipts: [GrowProposalReceiptV1]) {
+    guard entries.last?.sceneBytes != bytes || entries.last?.acceptedGrowReceipts != acceptedGrowReceipts else { return }
+    entries.append(SceneUndoEntry(sceneBytes: bytes, acceptedGrowReceipts: acceptedGrowReceipts))
     if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
   }
 
-  mutating func undo() -> Data? { entries.popLast() }
+  mutating func undo() -> SceneUndoEntry? { entries.popLast() }
 }

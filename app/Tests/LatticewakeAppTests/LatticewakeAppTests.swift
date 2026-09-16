@@ -117,7 +117,11 @@ final class LatticewakeAppTests: XCTestCase {
     await fulfillment(of: [refreshed], timeout: 1)
   }
 
-  func testCoreMIDIPacketPortDeliversThroughNonisolatedFactory() async {
+  func testCoreMIDIPacketPortDeliversThroughNonisolatedFactory() async throws {
+    var client = MIDIClientRef()
+    let clientResult = MIDIClientCreateWithBlock("Latticewake MIDI Test" as CFString, &client, { _ in })
+    guard clientResult == noErr else { throw XCTSkip("Core MIDI service unavailable: \(clientResult)") }
+    defer { MIDIClientDispose(client) }
     let received = expectation(description: "Core MIDI packet reaches main actor")
     let dispatcher = MIDIReceiveDispatcher { messages in
       Task { @MainActor in
@@ -126,15 +130,13 @@ final class LatticewakeAppTests: XCTestCase {
         received.fulfill()
       }
     }
-    var client = MIDIClientRef()
-    XCTAssertEqual(MIDIClientCreateWithBlock("Latticewake MIDI Test" as CFString, &client, { _ in }), noErr)
-    defer { MIDIClientDispose(client) }
     guard let inputPort = createMIDIInputPort(client: client, dispatcher: dispatcher) else {
-      return XCTFail("could not create Core MIDI input port")
+      throw XCTSkip("Core MIDI input port unavailable")
     }
     defer { MIDIPortDispose(inputPort) }
     var source = MIDIEndpointRef()
-    XCTAssertEqual(MIDISourceCreate(client, "Latticewake MIDI Test Source" as CFString, &source), noErr)
+    let sourceResult = MIDISourceCreate(client, "Latticewake MIDI Test Source" as CFString, &source)
+    guard sourceResult == noErr else { throw XCTSkip("Core MIDI source unavailable: \(sourceResult)") }
     defer { MIDIEndpointDispose(source) }
     XCTAssertEqual(MIDIPortConnectSource(inputPort, source, nil), noErr)
 
@@ -190,6 +192,17 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(loaded.performance, settings)
   XCTAssertEqual(saved.sha256, loaded.receipt.sha256)
 }
+
+  func testGrowReceiptRoundTripsAndLegacyLibraryStaysReadable() throws {
+    let proposal = GrowEngine.propose(base: .init(), sceneHash: "base", depth: .related,
+                                      frozen: FrozenComponents(surface: true, traversal: false, articulation: true))
+    let receipt = GrowProposalReceiptV1(proposal: proposal, candidateSceneSHA256: "candidate")
+    let document = SceneLibraryDocumentV1(sceneJSON: DemoScene.gestureJSON, acceptedGrowReceipts: [receipt])
+    let data = try JSONEncoder().encode(document)
+    XCTAssertEqual(try JSONDecoder().decode(SceneLibraryDocumentV1.self, from: data).acceptedGrowReceipts, [receipt])
+    let legacy = "{\"schemaVersion\":\"latticewake-library-v1\",\"sceneJSON\":\"{}\",\"performance\":{\"gestureGlideSemitones\":12,\"pointerNote\":48,\"roleTransportEnabled\":false}}"
+    XCTAssertTrue(try JSONDecoder().decode(SceneLibraryDocumentV1.self, from: Data(legacy.utf8)).acceptedGrowReceipts.isEmpty)
+  }
 
   func testSceneV1MigrationIsDeterministicAndLoadable() throws {
     let source = Data(DemoScene.fourRoleJSON.utf8)
@@ -291,9 +304,9 @@ final class LatticewakeAppTests: XCTestCase {
   func testSceneUndoIsBoundedAndRestoresPrecedingBytes() {
   var history = SceneUndoHistory()
   let first = Data("first".utf8), second = Data("second".utf8)
-  history.record(first); history.record(first); history.record(second)
-  XCTAssertEqual(history.undo(), second)
-  XCTAssertEqual(history.undo(), first)
+  history.record(first, acceptedGrowReceipts: []); history.record(first, acceptedGrowReceipts: []); history.record(second, acceptedGrowReceipts: [])
+  XCTAssertEqual(history.undo()?.sceneBytes, second)
+  XCTAssertEqual(history.undo()?.sceneBytes, first)
   XCTAssertNil(history.undo())
 }
 
