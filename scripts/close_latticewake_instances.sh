@@ -7,8 +7,8 @@ if [[ "${1:-}" == "--keep-existing" ]]; then exit 0; fi
 
 typeset -a pids
 pids=(${(@f)$(/bin/ps -axo pid=,command= | awk -v root="$root_dir" '
-  (index($0, root "/build/Latticewake.app/Contents/MacOS/LatticewakeApp") ||
-   index($0, root "/build/review/")) && print $1
+  index($0, root "/build/Latticewake.app/Contents/MacOS/LatticewakeApp") ||
+  index($0, root "/build/review/") { print $1 }
 ')} )
 for pid in $pids; do
   [[ "$pid" == <-> ]] || continue
@@ -22,8 +22,8 @@ for pid in $pids; do
   done
 done
 remaining=(${(@f)$(/bin/ps -axo pid=,command= | awk -v root="$root_dir" '
-  (index($0, root "/build/Latticewake.app/Contents/MacOS/LatticewakeApp") ||
-   index($0, root "/build/review/")) && print $1
+  index($0, root "/build/Latticewake.app/Contents/MacOS/LatticewakeApp") ||
+  index($0, root "/build/review/") { print $1 }
 ')} )
 if (( ${#remaining} )); then
   print -u2 "latticewake instances still running: ${remaining[*]}"
