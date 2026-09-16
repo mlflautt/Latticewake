@@ -70,6 +70,32 @@ struct ValidatedAgentProposal: Equatable {
   let candidate: SceneEditorControls
 }
 
+enum LocalProposalIntent: String, CaseIterable, Identifiable {
+  case surfaceLift = "Surface Lift"
+  case orbitPath = "Orbit Path"
+  case softArrival = "Soft Arrival"
+  var id: String { rawValue }
+  var component: String {
+    switch self { case .surfaceLift: "Surface"; case .orbitPath: "Traversal"; case .softArrival: "Articulation" }
+  }
+}
+
+enum LocalProposalProvider {
+  static func propose(intent: LocalProposalIntent, sceneHash: String, frozen: FrozenComponents) -> ScenePatchProposalV1? {
+    guard !frozen.names.contains(intent.component) else { return nil }
+    let patches: [ProposalPatchV1] = switch intent {
+    case .surfaceLift: [ProposalPatchV1(field: .terrainDetail, value: 0.68), ProposalPatchV1(field: .terrainZoom, value: 0.42)]
+    case .orbitPath: [ProposalPatchV1(field: .traversalRadiusX, value: 0.72), ProposalPatchV1(field: .traversalRadiusY, value: 0.38)]
+    case .softArrival: [ProposalPatchV1(field: .attackSeconds, value: 0.045), ProposalPatchV1(field: .releaseSeconds, value: 0.38)]
+    }
+    return ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema,
+                                proposalID: "local-\(intent.id)-\(String(sceneHash.prefix(12)))",
+                                provider: "latticewake-local-palette-v1",
+                                baseSceneSHA256: sceneHash,
+                                frozenComponents: frozen.names.sorted(), patches: patches)
+  }
+}
+
 enum ProposalContractError: LocalizedError, Equatable {
   case schema, identity(String), baseScene, frozenState, patchCount, duplicateField, invalidValue(String), frozenField(String)
   var errorDescription: String? {
@@ -88,6 +114,7 @@ enum ProposalContractError: LocalizedError, Equatable {
 
 struct ProposalStudioView: View {
   @Binding var json: String
+  @Binding var localIntent: LocalProposalIntent
   let validated: ValidatedAgentProposal?
   let status: String
   let validate: () -> Void
@@ -95,11 +122,14 @@ struct ProposalStudioView: View {
   let accept: () -> Void
   let reject: () -> Void
   let sample: () -> Void
+  let prepareLocal: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Proposal Studio").font(.caption.bold()).foregroundStyle(.purple)
       Text("Paste a bounded ScenePatch proposal. Validation never changes the scene.").font(.caption2).foregroundStyle(.secondary)
+      Picker("Local palette", selection: $localIntent) { ForEach(LocalProposalIntent.allCases) { Text($0.rawValue).tag($0) } }.pickerStyle(.segmented)
+      Button("Prepare Local Proposal", action: prepareLocal).buttonStyle(.bordered)
       TextEditor(text: $json).font(.caption.monospaced()).frame(minHeight: 90).border(.secondary.opacity(0.4))
       HStack { Button("Sample Proposal", action: sample); Button("Validate", action: validate).buttonStyle(.borderedProminent); Button("Clear") { json = ""; reject() }.buttonStyle(.bordered) }
       if !status.isEmpty { Text(status).font(.caption2).foregroundStyle(validated == nil ? .orange : .mint) }

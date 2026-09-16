@@ -312,6 +312,15 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(agentReceipt.baseSceneSHA256, baseHash)
   }
 
+  func testLocalProposalProviderIsDeterministicAndHonorsFreeze() throws {
+    let hash = "abcdef0123456789"
+    let first = try XCTUnwrap(LocalProposalProvider.propose(intent: .orbitPath, sceneHash: hash, frozen: .init()))
+    XCTAssertEqual(first, LocalProposalProvider.propose(intent: .orbitPath, sceneHash: hash, frozen: .init()))
+    XCTAssertEqual(first.provider, "latticewake-local-palette-v1")
+    XCTAssertEqual(first.patches.map(\.field), [.traversalRadiusX, .traversalRadiusY])
+    XCTAssertNil(LocalProposalProvider.propose(intent: .orbitPath, sceneHash: hash, frozen: FrozenComponents(surface: false, traversal: true, articulation: false)))
+  }
+
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

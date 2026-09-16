@@ -29,6 +29,7 @@ struct ContentView: View {
   @State private var acceptedGrowReceipts: [GrowProposalReceiptV1] = []
   @State private var acceptedAgentReceipts: [AgentProposalReceiptV1] = []
   @State private var proposalJSON = ""
+  @State private var localProposalIntent: LocalProposalIntent = .orbitPath
   @State private var validatedAgentProposal: ValidatedAgentProposal?
   @State private var proposalStatus = ""
   @State private var undoHistory = SceneUndoHistory()
@@ -112,7 +113,7 @@ struct ContentView: View {
               Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
               GrowControlsView(depth: $growDepth, frozen: $frozenComponents, proposal: growProposal, generate: generateGrow, preview: previewGrow, accept: acceptGrow, reject: { growProposal = nil })
               if let receipt = acceptedGrowReceipts.last { Text("Accepted variations: \(acceptedGrowReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
-              ProposalStudioView(json: $proposalJSON, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal, sample: loadProposalFixture)
+              ProposalStudioView(json: $proposalJSON, localIntent: $localProposalIntent, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal, sample: loadProposalFixture, prepareLocal: loadLocalProposal)
               if let receipt = acceptedAgentReceipts.last { Text("Accepted agent proposals: \(acceptedAgentReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
               Button("Close Library") { libraryOpen = false }.font(.caption)
               Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
@@ -237,6 +238,20 @@ struct ContentView: View {
       proposalJSON = json
       validatedAgentProposal = nil
       proposalStatus = "Local fixture loaded. Validate it before previewing."
+    } catch { proposalStatus = error.localizedDescription }
+  }
+
+  private func loadLocalProposal() {
+    let sceneHash = SceneLibrary.receipt(for: sceneBytes).sha256
+    guard let proposal = LocalProposalProvider.propose(intent: localProposalIntent, sceneHash: sceneHash, frozen: frozenComponents) else {
+      proposalStatus = "\(localProposalIntent.component) is frozen; local proposal was not created."
+      return
+    }
+    do {
+      let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+      proposalJSON = String(decoding: try encoder.encode(proposal), as: UTF8.self)
+      validatedAgentProposal = nil
+      proposalStatus = "Local \(localProposalIntent.rawValue) proposal ready. Validate it before previewing."
     } catch { proposalStatus = error.localizedDescription }
   }
 
