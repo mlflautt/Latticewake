@@ -278,6 +278,23 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertNotEqual(first.candidate.traversalRadiusX, base.traversalRadiusX)
   }
 
+  func testGrowCandidateSetIsBoundedDeterministicAndUnranked() {
+    let base = SceneEditorControls()
+    let first = GrowEngine.proposeVariants(base: base, sceneHash: "scene-identity", depth: .related,
+                                            frozen: .init())
+    XCTAssertEqual(first.count, 3)
+    XCTAssertEqual(first, GrowEngine.proposeVariants(base: base, sceneHash: "scene-identity", depth: .related,
+                                                      frozen: .init()))
+    XCTAssertEqual(first.map(\.variationIndex), [0, 1, 2])
+    XCTAssertEqual(Set(first.map(\.id)).count, 3)
+    XCTAssertEqual(Set(first.map(\.seed)).count, 3)
+    XCTAssertTrue(first.allSatisfy { $0.changed.isEmpty == false })
+    XCTAssertTrue(GrowEngine.proposeVariants(base: base, sceneHash: "scene-identity", depth: .subtle,
+                                              frozen: .init(surface: true, traversal: true, articulation: true)).isEmpty)
+    XCTAssertTrue(GrowEngine.proposeVariants(base: base, sceneHash: "scene-identity", depth: .subtle,
+                                              frozen: .init(), count: 5).isEmpty)
+  }
+
   func testProposalContractIsBoundedAndFreezeAware() throws {
     let frozen = FrozenComponents(surface: true, traversal: false, articulation: false)
     let proposal = ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema, proposalID: "agent-1",

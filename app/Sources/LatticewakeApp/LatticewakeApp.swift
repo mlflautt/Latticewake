@@ -25,7 +25,8 @@ struct ContentView: View {
   @State private var previewActive = false
   @State private var growDepth: GrowDepth = .related
   @State private var frozenComponents = FrozenComponents()
-  @State private var growProposal: GrowProposal?
+  @State private var growProposals: [GrowProposal] = []
+  @State private var selectedGrowProposalID: String?
   @State private var acceptedGrowReceipts: [GrowProposalReceiptV1] = []
   @State private var acceptedAgentReceipts: [AgentProposalReceiptV1] = []
   @State private var proposalJSON = ""
@@ -111,7 +112,10 @@ struct ContentView: View {
           if libraryOpen {
             StageDrawer(title: "Library", color: .cyan) {
               Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
-              GrowControlsView(depth: $growDepth, frozen: $frozenComponents, proposal: growProposal, generate: generateGrow, preview: previewGrow, accept: acceptGrow, reject: { growProposal = nil })
+              GrowControlsView(depth: $growDepth, frozen: $frozenComponents,
+                               proposals: growProposals, selectedProposalID: $selectedGrowProposalID,
+                               generate: generateGrow, preview: previewGrow, accept: acceptGrow,
+                               reject: rejectGrow)
               if let receipt = acceptedGrowReceipts.last { Text("Accepted variations: \(acceptedGrowReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
               ProposalStudioView(json: $proposalJSON, localIntent: $localProposalIntent, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal, sample: loadProposalFixture, prepareLocal: loadLocalProposal)
               if let receipt = acceptedAgentReceipts.last { Text("Accepted agent proposals: \(acceptedAgentReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
@@ -207,17 +211,32 @@ struct ContentView: View {
       try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
     } catch { self.error = error.localizedDescription }
   }
-  private func generateGrow() { growProposal = GrowEngine.propose(base: editorControls, sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256, depth: growDepth, frozen: frozenComponents) }
-  private func previewGrow() { guard let growProposal else { return }; do { try previewTemporary(SceneEditorBridge.apply(growProposal.candidate, to: sceneBytes), label: "Grow preview") } catch { self.error = error.localizedDescription } }
-  private func acceptGrow() {
-    guard let growProposal else { return }
+  private func generateGrow() {
+    growProposals = GrowEngine.proposeVariants(base: editorControls,
+                                               sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256,
+                                               depth: growDepth, frozen: frozenComponents)
+    selectedGrowProposalID = growProposals.first?.id
+    if growProposals.isEmpty { error = "All Grow components are frozen; no variations were created." }
+  }
+  private func previewGrow(_ proposal: GrowProposal) {
+    do { try previewTemporary(SceneEditorBridge.apply(proposal.candidate, to: sceneBytes), label: "Grow preview \(proposal.variationIndex + 1)") }
+    catch { self.error = error.localizedDescription }
+  }
+  private func acceptGrow(_ proposal: GrowProposal) {
     do {
-      let candidate = try SceneEditorBridge.apply(growProposal.candidate, to: sceneBytes)
-      let proposalReceipt = GrowProposalReceiptV1(proposal: growProposal, candidateSceneSHA256: SceneLibrary.receipt(for: candidate).sha256)
+      let candidate = try SceneEditorBridge.apply(proposal.candidate, to: sceneBytes)
+      let proposalReceipt = GrowProposalReceiptV1(proposal: proposal, candidateSceneSHA256: SceneLibrary.receipt(for: candidate).sha256)
       try installScene(candidate, url: sceneURL, recordUndo: true, dirty: true)
       acceptedGrowReceipts.append(proposalReceipt)
-      self.growProposal = nil
+      self.growProposals = []
+      self.selectedGrowProposalID = nil
     } catch { self.error = error.localizedDescription }
+  }
+
+  private func rejectGrow() {
+    growProposals = []
+    selectedGrowProposalID = nil
+    returnToCurrent()
   }
 
   private func validateAgentProposal() {
