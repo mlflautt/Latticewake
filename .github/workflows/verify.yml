@@ -1,14 +1,8 @@
 name: verify
 on: [push, pull_request]
 jobs:
-  core:
+  release-verification:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
-      - run: make test
-  app:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: swift test
-        working-directory: app
+      - run: make verify-release

@@ -13,12 +13,24 @@ kill existing app instances, or modify saved scenes.
    `build/crash-triage/`.
 3. Run `make crash-smoke` for the eight-second bounded launch check, or launch
    the app manually and then run `make crash-report`.
-4. Read `build/crash-triage/summary.txt`. A newly produced `.ips` file is copied
+4. When a UI, performance, or crash observation must be bound to one exact
+   process, use `make launch-exact`. It launches the verified app through
+   macOS Launch Services, identifies the newly created exact-binary PID, and
+   writes its executable command, version, SHA-256, and Mach-O
+   UUID receipt under `build/exact-launch/`. It never kills a process. The
+   receipt proves process identity only; it does not automate UI interaction or
+   establish that a screen observation came from a particular control action.
+5. Read `build/crash-triage/summary.txt`. A newly produced `.ips` file is copied
    into the bundle for a reproducible handoff.
-5. Classify before changing code: Swift executor isolation, Core MIDI lifecycle,
+6. Classify before changing code: Swift executor isolation, Core MIDI lifecycle,
    SwiftUI layout/view lifecycle, audio host/callback, or unclassified.
-6. Add the smallest deterministic regression that exercises the exact boundary;
+7. Add the smallest deterministic regression that exercises the exact boundary;
    rebuild and repeat this loop from a new baseline.
+
+For a release candidate, run `make verify-release` before the target-Mac
+steps. It executes normal C++ fixtures, a fresh ASan/UBSan matrix, Swift tests,
+packaging, and exact bundle identity/signature verification. Hosted CI runs the
+same command; launch and device checks remain local target-Mac evidence.
 
 ## Evidence rules
 
