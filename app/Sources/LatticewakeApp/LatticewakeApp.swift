@@ -23,6 +23,9 @@ struct ContentView: View {
   @State private var modulationControls = ModulationControls()
   @State private var previewABytes: Data?
   @State private var previewActive = false
+  @State private var growDepth: GrowDepth = .related
+  @State private var frozenComponents = FrozenComponents()
+  @State private var growProposal: GrowProposal?
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
   @State private var libraryOpen = false
@@ -102,6 +105,7 @@ struct ContentView: View {
           if libraryOpen {
             StageDrawer(title: "Library", color: .cyan) {
               Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
+              GrowControlsView(depth: $growDepth, frozen: $frozenComponents, proposal: growProposal, generate: generateGrow, preview: previewGrow, accept: acceptGrow, reject: { growProposal = nil })
               Button("Close Library") { libraryOpen = false }.font(.caption)
               Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
             }
@@ -194,6 +198,9 @@ struct ContentView: View {
       try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
     } catch { self.error = error.localizedDescription }
   }
+  private func generateGrow() { growProposal = GrowEngine.propose(base: editorControls, sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256, depth: growDepth, frozen: frozenComponents) }
+  private func previewGrow() { guard let growProposal else { return }; do { try previewTemporary(SceneEditorBridge.apply(growProposal.candidate, to: sceneBytes), label: "Grow preview") } catch { self.error = error.localizedDescription } }
+  private func acceptGrow() { guard let growProposal else { return }; editorControls = growProposal.candidate; applyEditorChanges(); self.growProposal = nil }
 
   private func previewEditorChanges() {
     do { try previewTemporary(SceneEditorBridge.apply(editorControls, to: sceneBytes), label: "Candidate preview") }

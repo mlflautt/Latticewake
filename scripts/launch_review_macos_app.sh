@@ -1,12 +1,11 @@
 #!/bin/zsh
 # Create and launch an isolated, signed review copy of the verified standalone
 # app. A unique bundle ID lets native UI automation select this exact build even
-# when another Latticewake instance is already open. It never alters user scenes
-# or terminates existing processes.
+# when another Latticewake instance is already open. It never alters user scenes.
 set -euo pipefail
 
 usage() {
-  print "usage: $0 [--out DIRECTORY] [--wait SECONDS]"
+  print "usage: $0 [--out DIRECTORY] [--wait SECONDS] [--keep-existing]"
   exit 64
 }
 
@@ -14,14 +13,18 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 app_bundle="${root_dir}/build/Latticewake.app"
 output_dir=""
 wait_seconds=3
+keep_existing=0
 
 while (( $# > 0 )); do
   case "$1" in
     --out) output_dir="${2:-}"; shift 2 ;;
     --wait) wait_seconds="${2:-}"; shift 2 ;;
+    --keep-existing) keep_existing=1; shift ;;
     *) usage ;;
   esac
 done
+
+if (( ! keep_existing )); then zsh "${root_dir}/scripts/close_latticewake_instances.sh"; fi
 
 [[ "$wait_seconds" == <-> ]] || { print -- "--wait must be a non-negative integer" >&2; exit 64; }
 zsh "${root_dir}/scripts/verify_macos_bundle.sh"

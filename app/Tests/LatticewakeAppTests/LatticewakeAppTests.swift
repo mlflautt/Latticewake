@@ -246,6 +246,13 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(traversal.terrainDetail, base.terrainDetail)
     XCTAssertEqual(SceneEditorPreset.softArrival.applying(to: base), SceneEditorPreset.softArrival.applying(to: base))
   }
+  func testGrowProposalIsDeterministicAndHonorsFreeze() {
+    let base = SceneEditorControls(); let frozen = FrozenComponents(surface: true, traversal: false, articulation: true)
+    let first = GrowEngine.propose(base: base, sceneHash: "abc", depth: .related, frozen: frozen)
+    XCTAssertEqual(first, GrowEngine.propose(base: base, sceneHash: "abc", depth: .related, frozen: frozen))
+    XCTAssertEqual(first.candidate.terrainDetail, base.terrainDetail); XCTAssertEqual(first.candidate.attackSeconds, base.attackSeconds)
+    XCTAssertNotEqual(first.candidate.traversalRadiusX, base.traversalRadiusX)
+  }
 
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)

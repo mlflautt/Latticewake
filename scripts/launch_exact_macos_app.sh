@@ -1,12 +1,12 @@
 #!/bin/zsh
 # Launch the exact verified standalone app and record a process receipt.
-# This helper never terminates an existing process, deletes crash reports, or
+# This helper never deletes crash reports or
 # changes saved scenes. It uses Launch Services, then records only a newly
 # created process whose executable path is the exact binary being examined.
 set -euo pipefail
 
 usage() {
-  print "usage: $0 [--app APP_BUNDLE] [--out DIRECTORY] [--wait SECONDS]"
+  print "usage: $0 [--app APP_BUNDLE] [--out DIRECTORY] [--wait SECONDS] [--keep-existing]"
   exit 64
 }
 
@@ -14,12 +14,14 @@ root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 app_bundle="${LW_APP_BUNDLE:-${root_dir}/build/Latticewake.app}"
 output_dir=""
 wait_seconds=3
+keep_existing=0
 
 while (( $# > 0 )); do
   case "$1" in
     --app) app_bundle="${2:-}"; shift 2 ;;
     --out) output_dir="${2:-}"; shift 2 ;;
     --wait) wait_seconds="${2:-}"; shift 2 ;;
+    --keep-existing) keep_existing=1; shift ;;
     *) usage ;;
   esac
 done
@@ -29,6 +31,7 @@ done
 binary="${app_bundle}/Contents/MacOS/LatticewakeApp"
 plist="${app_bundle}/Contents/Info.plist"
 [[ -x "$binary" && -f "$plist" ]] || { print -- "app bundle not found: $app_bundle" >&2; exit 66; }
+if (( ! keep_existing )); then zsh "${root_dir}/scripts/close_latticewake_instances.sh"; fi
 
 # The default bundle must be proven to correspond to the current SwiftPM
 # product before it is launched. A custom --app path remains useful for
