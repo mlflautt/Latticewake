@@ -5,10 +5,12 @@ set -euo pipefail
 root_dir="$(cd "$(dirname "$0")/.." && pwd)"
 app_dir="${root_dir}/app"
 bundle_binary="${root_dir}/build/Latticewake.app/Contents/MacOS/LatticewakeApp"
+export CLANG_MODULE_CACHE_PATH="${root_dir}/build/clang-module-cache"
+export SWIFTPM_MODULECACHE_OVERRIDE="${root_dir}/build/swiftpm-module-cache"
 
 cd "$app_dir"
-swift build -c debug >/dev/null
-product_dir="$(swift build -c debug --show-bin-path)"
+swift build -c debug --disable-sandbox >/dev/null
+product_dir="$(swift build -c debug --disable-sandbox --show-bin-path)"
 product_binary="${product_dir}/LatticewakeApp"
 
 [[ -x "$product_binary" && -x "$bundle_binary" ]] || {

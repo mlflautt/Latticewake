@@ -267,6 +267,22 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertNotEqual(first.candidate.traversalRadiusX, base.traversalRadiusX)
   }
 
+  func testProposalContractIsBoundedAndFreezeAware() throws {
+    let frozen = FrozenComponents(surface: true, traversal: false, articulation: false)
+    let proposal = ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema, proposalID: "agent-1",
+                                        provider: "test-provider", baseSceneSHA256: "scene",
+                                        frozenComponents: ["Surface"], patches: [
+                                          ProposalPatchV1(field: .traversalRadiusX, value: 0.62),
+                                          ProposalPatchV1(field: .gain, value: 0.8)])
+    let candidate = try ProposalContractV1.validatedCandidate(proposal, base: .init(), sceneHash: "scene", frozen: frozen)
+    XCTAssertEqual(candidate.traversalRadiusX, 0.62); XCTAssertEqual(candidate.gain, 0.8)
+    let frozenPatch = ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema, proposalID: "agent-2",
+                                           provider: "test-provider", baseSceneSHA256: "scene",
+                                           frozenComponents: ["Surface"], patches: [ProposalPatchV1(field: .terrainDetail, value: 0.2)])
+    XCTAssertThrowsError(try ProposalContractV1.validatedCandidate(frozenPatch, base: .init(), sceneHash: "scene", frozen: frozen))
+    XCTAssertThrowsError(try ProposalContractV1.validatedCandidate(proposal, base: .init(), sceneHash: "other", frozen: frozen))
+  }
+
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
