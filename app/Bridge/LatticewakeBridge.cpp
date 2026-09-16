@@ -169,25 +169,65 @@ int lw_terrain_frame_scene_json(const char* json,const unsigned long long sample
   *pointCount=static_cast<unsigned int>(frame->points.size());
   return 1;
 }
-static unsigned int rolePatternIndex(const latticewake::RoleLane& role) {
+static unsigned int rolePatternIndex(const unsigned int roleIndex, const latticewake::RoleLane& role) {
   if (role.pattern == std::vector<int>{0}) return 0U;
   if (role.pattern == std::vector<int>{0, 2, 4}) return 1U;
   if (role.pattern == std::vector<int>{4, 2, 0}) return 2U;
+  if (roleIndex == 2U) {
+    if (role.pattern == std::vector<int>{0, 2, 4, 2}) return 4U;
+    if (role.pattern == std::vector<int>{0, 2, 4, 5}) return 5U;
+    if (role.pattern == std::vector<int>{0, 2, 4, 5, 7, 5, 4, 2}) return 6U;
+    if (role.pattern == std::vector<int>{0, 4, 2, 5}) return 7U;
+  }
+  if (roleIndex == 3U) {
+    if (role.pattern == std::vector<int>{0, 1, 3, 2}) return 4U;
+    if (role.pattern == std::vector<int>{0, 3, 1, 4, 2}) return 5U;
+    if (role.pattern == std::vector<int>{0, 2, 1, 3, 5, 3, 1, 2}) return 6U;
+    if (role.pattern == std::vector<int>{0, 4, 1, 5, 2, 6, 3}) return 7U;
+  }
   // The only remaining supported UI pattern is Pulse. Classifying unknown
   // imported material as Pulse retains a non-held shape rather than silently
   // rewriting it to Held when the role controls are round-tripped.
   return 3U;
 }
-int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,rolePatternIndex(role)};return 1; }
+int lw_scene_role_control(const char* json,const unsigned int roleIndex,LWRoleControl* control) { if(!json||!control)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);if(!scene||roleIndex>=scene->roles.size())return 0;const auto& role=scene->roles[roleIndex];*control={role.enabled?1U:0U,static_cast<float>(role.range),static_cast<float>(role.density),role.seedOffset,rolePatternIndex(roleIndex,role)};return 1; }
+static bool applyRolePattern(const unsigned int roleIndex, const unsigned int pattern, latticewake::RoleLane& role) {
+  switch(pattern) {
+    case 0: role.pattern={0}; role.rhythm={{latticewake::RhythmStepKind::note}}; return true;
+    case 1: role.pattern={0,2,4}; role.rhythm={{latticewake::RhythmStepKind::note}}; return true;
+    case 2: role.pattern={4,2,0}; role.rhythm={{latticewake::RhythmStepKind::note}}; return true;
+    case 3: role.pattern={0,1,2,1}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}}; return true;
+    default: break;
+  }
+  if (roleIndex == 2U) {
+    switch(pattern) {
+      case 4: role.pattern={0,2,4,2}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}}; return true;
+      case 5: role.pattern={0,2,4,5}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}}; return true;
+      case 6: role.pattern={0,2,4,5,7,5,4,2}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note}}; return true;
+      case 7: role.pattern={0,4,2,5}; role.rhythm={{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note}}; return true;
+      default: return false;
+    }
+  }
+  if (roleIndex == 3U) {
+    switch(pattern) {
+      case 4: role.pattern={0,1,3,2}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note}}; return true;
+      case 5: role.pattern={0,3,1,4,2}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}}; return true;
+      case 6: role.pattern={0,2,1,3,5,3,1,2}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note}}; return true;
+      case 7: role.pattern={0,4,1,5,2,6,3}; role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}}; return true;
+      default: return false;
+    }
+  }
+  return false;
+}
 int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,const LWRoleControl* control,char** canonicalJson) {
-  if(!json||!control||!canonicalJson||control->pattern>3U)return 0;
+  if(!json||!control||!canonicalJson||control->pattern>7U)return 0;
   latticewake::SceneSerializationError error;
   auto v1=latticewake::parseSceneV1(json,error);
   auto scene=v1?std::optional<latticewake::Scene>(v1->compatibilityScene):latticewake::parseSceneV0(json,error);
   if(!scene||roleIndex>=scene->roles.size())return 0;
   auto& role=scene->roles[roleIndex];
   role.enabled=control->enabled!=0;role.range=control->range;role.density=control->density;role.seedOffset=control->seed_offset;
-  switch(control->pattern){case 0:role.pattern={0};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 1:role.pattern={0,2,4};role.rhythm={{latticewake::RhythmStepKind::note}};break;case 2:role.pattern={4,2,0};role.rhythm={{latticewake::RhythmStepKind::note}};break;default:role.pattern={0,1,2,1};role.rhythm={{latticewake::RhythmStepKind::note},{latticewake::RhythmStepKind::rest}};break;}
+  if(!applyRolePattern(roleIndex,control->pattern,role))return 0;
   std::optional<std::string> serialized;
   if(v1){v1->compatibilityScene=*scene;v1->lanes[roleIndex].role=role;serialized=latticewake::serializeSceneV1(*v1,error);}
   else serialized=latticewake::serializeSceneV0(*scene,error);

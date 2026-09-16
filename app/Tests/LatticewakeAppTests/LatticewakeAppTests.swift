@@ -315,11 +315,11 @@ final class LatticewakeAppTests: XCTestCase {
     let baseBytes = try SceneDocumentBridge.canonicalV1(from: Data(DemoScene.fourRoleJSON.utf8))
     let hash = SceneLibrary.receipt(for: baseBytes).sha256
     let baseRoles = try RoleSceneBridge.controls(from: baseBytes)
-    let proposal = try XCTUnwrap(LocalProposalProvider.propose(intent: .motifPulse, sceneHash: hash, frozen: .init()))
+    let proposal = try XCTUnwrap(LocalProposalProvider.propose(intent: .motifEuclid, sceneHash: hash, frozen: .init()))
     let validated = try ProposalContractV1.validatedProposal(proposal, base: try SceneEditorBridge.controls(from: baseBytes),
                                                               roles: baseRoles, sceneHash: hash, frozen: .init())
-    XCTAssertEqual(validated.roleCandidate[2].pattern, 3)
-    XCTAssertEqual(validated.roleCandidate[2].density, 0.72, accuracy: 0.0001)
+    XCTAssertEqual(validated.roleCandidate[2].pattern, 5)
+    XCTAssertEqual(validated.roleCandidate[2].density, 0.68, accuracy: 0.0001)
     let editorApplied = try SceneEditorBridge.apply(validated.editorCandidate, to: baseBytes)
     let applied = try RoleSceneBridge.apply(validated.roleCandidate, to: editorApplied)
     let roundTripped = try RoleSceneBridge.controls(from: applied)[2]
@@ -331,6 +331,15 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertThrowsError(try ProposalContractV1.validatedProposal(proposal, base: .init(), roles: baseRoles,
                                                                     sceneHash: hash,
                                                                     frozen: .init(lanes: true)))
+  }
+
+  func testMotifPatternFamiliesRemainRoleSpecificAndBounded() throws {
+    XCTAssertEqual(RoleControl.patterns(for: 0), ["Held", "Rise", "Fall", "Pulse"])
+    XCTAssertEqual(RoleControl.patterns(for: 1), ["Held", "Rise", "Fall", "Pulse"])
+    XCTAssertEqual(Array(RoleControl.patterns(for: 2).suffix(4)), ["Euclid 3/8", "Euclid 5/8", "Euclid 7/8", "Offbeat"])
+    XCTAssertEqual(Array(RoleControl.patterns(for: 3).suffix(4)), ["Cellular", "Rotate 5", "Recursive", "Coprime"])
+    let proposal = try XCTUnwrap(LocalProposalProvider.propose(intent: .motifCell, sceneHash: "scene", frozen: .init()))
+    XCTAssertEqual(proposal.patches.last, ProposalPatchV1(field: .motifBPattern, value: 4))
   }
 
   func testProposalFixtureDrivesValidateAcceptUndoReceiptPath() throws {

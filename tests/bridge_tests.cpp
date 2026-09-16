@@ -224,12 +224,12 @@ void testRoleControlCanonicalBoundary() {
   control.enabled = 0;
   control.density = 0.75F;
   control.seed_offset = 99;
-  control.pattern = 2;
+  control.pattern = 5;
   char* updated = nullptr;
   assert(lw_scene_apply_role_control(kCanonicalScene, 2, &control, &updated) == 1);
   LWRoleControl repeated{};
   assert(lw_scene_role_control(updated, 2, &repeated) == 1);
-  assert(repeated.enabled == 0U && repeated.density == 0.75F && repeated.seed_offset == 99U && repeated.pattern == 2U);
+  assert(repeated.enabled == 0U && repeated.density == 0.75F && repeated.seed_offset == 99U && repeated.pattern == 5U);
   lw_string_destroy(updated);
 }
 

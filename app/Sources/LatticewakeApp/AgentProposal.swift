@@ -33,7 +33,8 @@ enum ProposalPatchField: String, Codable, CaseIterable {
     case .gain: 0...1.5
     case .droneEnabled, .padEnabled, .motifAEnabled, .motifBEnabled: 0...1
     case .droneDensity, .droneRange, .padDensity, .padRange, .motifADensity, .motifARange, .motifBDensity, .motifBRange: 0...1
-    case .dronePattern, .padPattern, .motifAPattern, .motifBPattern: 0...3
+    case .dronePattern, .padPattern: 0...3
+    case .motifAPattern, .motifBPattern: 0...7
     case .droneSeedOffset, .padSeedOffset, .motifASeedOffset, .motifBSeedOffset: 0...9999
     }
   }
@@ -108,6 +109,8 @@ enum LocalProposalIntent: String, CaseIterable, Identifiable {
   case softArrival = "Soft Arrival"
   case droneFoundation = "Drone Foundation"
   case motifPulse = "Motif Pulse"
+  case motifEuclid = "Motif Euclid"
+  case motifCell = "Motif Cellular"
   var id: String { rawValue }
   /// Contract IDs are deliberately independent of the artist-facing label.
   /// Keep them ASCII-safe so local and external providers obey the exact same
@@ -118,7 +121,7 @@ enum LocalProposalIntent: String, CaseIterable, Identifiable {
     case .surfaceLift: "Surface"
     case .orbitPath: "Traversal"
     case .softArrival: "Articulation"
-    case .droneFoundation, .motifPulse: "Lanes"
+    case .droneFoundation, .motifPulse, .motifEuclid, .motifCell: "Lanes"
     }
   }
 }
@@ -132,6 +135,8 @@ enum LocalProposalProvider {
     case .softArrival: [ProposalPatchV1(field: .attackSeconds, value: 0.045), ProposalPatchV1(field: .releaseSeconds, value: 0.38)]
     case .droneFoundation: [ProposalPatchV1(field: .droneEnabled, value: 1), ProposalPatchV1(field: .droneDensity, value: 0.30), ProposalPatchV1(field: .droneRange, value: 0.18), ProposalPatchV1(field: .dronePattern, value: 0)]
     case .motifPulse: [ProposalPatchV1(field: .motifAEnabled, value: 1), ProposalPatchV1(field: .motifADensity, value: 0.72), ProposalPatchV1(field: .motifARange, value: 0.58), ProposalPatchV1(field: .motifAPattern, value: 3)]
+    case .motifEuclid: [ProposalPatchV1(field: .motifAEnabled, value: 1), ProposalPatchV1(field: .motifADensity, value: 0.68), ProposalPatchV1(field: .motifARange, value: 0.55), ProposalPatchV1(field: .motifAPattern, value: 5)]
+    case .motifCell: [ProposalPatchV1(field: .motifBEnabled, value: 1), ProposalPatchV1(field: .motifBDensity, value: 0.64), ProposalPatchV1(field: .motifBRange, value: 0.62), ProposalPatchV1(field: .motifBPattern, value: 4)]
     }
     return ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema,
                                 proposalID: "local-\(intent.proposalSlug)-\(String(sceneHash.prefix(12)))",

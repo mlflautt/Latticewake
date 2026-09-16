@@ -26,7 +26,14 @@ struct RoleControl: Identifiable, Equatable {
   var seedOffset: UInt64
   var pattern: Int
   static let names = ["Drone", "Pad", "Motif A", "Motif B"]
-  static let patterns = ["Held", "Rise", "Fall", "Pulse"]
+  static let basePatterns = ["Held", "Rise", "Fall", "Pulse"]
+  static func patterns(for role: Int) -> [String] {
+    switch role {
+    case 2: basePatterns + ["Euclid 3/8", "Euclid 5/8", "Euclid 7/8", "Offbeat"]
+    case 3: basePatterns + ["Cellular", "Rotate 5", "Recursive", "Coprime"]
+    default: basePatterns
+    }
+  }
 }
 
 enum RoleSceneBridge {
@@ -76,8 +83,9 @@ struct RoleControlsView: View {
             Toggle(RoleControl.names[control.id], isOn: $control.enabled)
             Spacer()
             Picker("Pattern", selection: $control.pattern) {
-              ForEach(RoleControl.patterns.indices, id: \.self) { Text(RoleControl.patterns[$0]).tag($0) }
-            }.labelsHidden().frame(width: 100)
+              let patterns = RoleControl.patterns(for: control.id)
+              ForEach(patterns.indices, id: \.self) { Text(patterns[$0]).tag($0) }
+            }.labelsHidden().frame(width: 140)
           }
           HStack {
             Text("Density").font(.caption)
