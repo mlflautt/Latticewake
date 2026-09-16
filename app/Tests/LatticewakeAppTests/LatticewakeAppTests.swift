@@ -186,7 +186,7 @@ final class LatticewakeAppTests: XCTestCase {
   let saved = try SceneLibrary.save(document, to: libraryURL)
   let loaded = try SceneLibrary.load(from: libraryURL)
   XCTAssertFalse(loaded.originalSceneV0)
-  XCTAssertEqual(loaded.sceneBytes, Data(DemoScene.fourRoleJSON.utf8))
+  XCTAssertEqual(loaded.sceneBytes, try SceneDocumentBridge.canonicalV1(from: Data(DemoScene.fourRoleJSON.utf8)))
   XCTAssertEqual(loaded.performance, settings)
   XCTAssertEqual(saved.sha256, loaded.receipt.sha256)
 }
@@ -205,7 +205,41 @@ final class LatticewakeAppTests: XCTestCase {
     let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: first, as: UTF8.self))
     _ = try SceneLibrary.save(document, to: url)
     let loaded = try SceneLibrary.load(from: url)
-    XCTAssertEqual(loaded.sceneBytes, first)
+  XCTAssertEqual(loaded.sceneBytes, first)
+  }
+
+  func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+
+    let invalidSceneURL = directory.appendingPathComponent("invalid-scene.latticewake.json")
+    XCTAssertThrowsError(try SceneLibrary.save(SceneLibraryDocumentV1(sceneJSON: "{}"), to: invalidSceneURL))
+
+    let invalidPerformanceURL = directory.appendingPathComponent("invalid-performance.latticewake.json")
+    let invalidPerformance = PerformanceSettingsV1(gestureGlideSemitones: 25, pointerNote: 48, roleTransportEnabled: false)
+    XCTAssertThrowsError(try SceneLibrary.save(SceneLibraryDocumentV1(sceneJSON: DemoScene.fourRoleJSON,
+                                                                       performance: invalidPerformance), to: invalidPerformanceURL))
+  }
+
+  func testSceneLibraryRejectsInvalidEmbeddedSceneOnLoad() throws {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let invalid = """
+    {"schemaVersion":"latticewake-library-v1","sceneJSON":"{}","performance":{"gestureGlideSemitones":12,"pointerNote":48,"roleTransportEnabled":false}}
+    """
+    _ = try SceneStore.saveCanonical(Data(invalid.utf8), to: url)
+    XCTAssertThrowsError(try SceneLibrary.load(from: url))
+  }
+
+  func testSceneLibraryDoesNotDowngradeMalformedLibraryEnvelopeToLegacy() throws {
+    let url = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let malformed = """
+    {"schemaVersion":"latticewake-library-v1","sceneJSON":"{}"}
+    """
+    _ = try SceneStore.saveCanonical(Data(malformed.utf8), to: url)
+    XCTAssertThrowsError(try SceneLibrary.load(from: url))
   }
 
   func testSceneUndoIsBoundedAndRestoresPrecedingBytes() {
