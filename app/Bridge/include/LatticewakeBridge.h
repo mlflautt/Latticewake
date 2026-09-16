@@ -41,6 +41,25 @@ typedef struct LWRoleTraceSummary {
   unsigned long long last_sample;
   unsigned long long receipt;
 } LWRoleTraceSummary;
+typedef struct LWSceneEditorControls {
+  double terrain_detail;
+  double terrain_zoom;
+  double terrain_offset_x;
+  double terrain_offset_y;
+  double traversal_rate_ratio;
+  double traversal_radius_x;
+  double traversal_radius_y;
+  double traversal_angle;
+  double traversal_translation_x;
+  double traversal_translation_y;
+  double attack_seconds;
+  double release_seconds;
+  double gain;
+  double glide_semitones;
+  double velocity_response;
+  double pressure_response;
+  double slide_response;
+} LWSceneEditorControls;
 LWKernelRef* lw_kernel_create(void);
 void lw_kernel_destroy(LWKernelRef* kernel);
 int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
@@ -54,6 +73,9 @@ int lw_terrain_frame_scene_json(const char* json, unsigned long long sample_offs
 int lw_scene_role_control(const char* json, unsigned int role_index, LWRoleControl* control);
 int lw_scene_apply_role_control(const char* json, unsigned int role_index,
                                 const LWRoleControl* control, char** canonical_json);
+int lw_scene_editor_controls(const char* json, LWSceneEditorControls* controls);
+int lw_scene_apply_editor_controls(const char* json, const LWSceneEditorControls* controls,
+                                   char** canonical_json);
 int lw_role_preview_scene_json(const char* json, unsigned long long start_sample,
                                unsigned long long frames, double sample_rate,
                                LWRoleTraceSummary* summary);

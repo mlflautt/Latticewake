@@ -205,7 +205,23 @@ final class LatticewakeAppTests: XCTestCase {
     let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: first, as: UTF8.self))
     _ = try SceneLibrary.save(document, to: url)
     let loaded = try SceneLibrary.load(from: url)
-  XCTAssertEqual(loaded.sceneBytes, first)
+    XCTAssertEqual(loaded.sceneBytes, first)
+  }
+
+  func testSceneEditorMigratesExplicitlyAndRoundTripsControls() throws {
+    let legacy = Data(DemoScene.gestureJSON.utf8)
+    let baseline = try SceneEditorBridge.controls(from: legacy)
+    XCTAssertEqual(baseline.attackSeconds, 0.010)
+    var edited = baseline
+    edited.terrainZoom = 0
+    edited.traversalRateRatio = 1
+    edited.traversalRadiusY = 0.2
+    edited.attackSeconds = 0.04
+    edited.releaseSeconds = 0.24
+    edited.gain = 0.5
+    let applied = try SceneEditorBridge.apply(edited, to: legacy)
+    XCTAssertTrue(String(decoding: applied, as: UTF8.self).contains("\"latticewake-scene-v1\""))
+    XCTAssertEqual(try SceneEditorBridge.controls(from: applied), edited)
   }
 
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {

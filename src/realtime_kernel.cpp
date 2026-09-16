@@ -60,19 +60,21 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
         for (auto& v : voices_) if (!v.active) { target = &v; break; }
         if (!target) target = &*std::min_element(voices_.begin(), voices_.end(), [](const Voice& a, const Voice& b) { return a.age < b.age; });
         *target = {};
-        target->active = true; target->note = e.note; target->source = e.source; target->gain = e.velocity;
+        target->active = true; target->note = e.note; target->source = e.source;
+        target->gain = (1.0F - activePlan_->velocityResponse) + e.velocity * activePlan_->velocityResponse;
         target->increment = 440.0F * std::pow(2.0F, (float(e.note) - 69) / 12) / sampleRate_;
         target->glide = glide_; target->press = press_; target->slide = slide_; target->age = nextAge_++;
       } else {
         for (auto& v : voices_) if (v.active && v.note == e.note && (e.source == 0 || v.source == e.source) && !v.releasing) {
-          v.releasing = true; v.releaseStep = v.envelope / (0.120F * sampleRate_);
+          v.releasing = true;
+          v.releaseStep = v.envelope / (activePlan_->releaseSeconds * sampleRate_);
         }
       }
     }
     float input = 0;
     for (auto& v : voices_) if (v.active) {
       if (v.releasing) { v.envelope = std::max(0.0F, v.envelope - v.releaseStep); if (v.envelope <= 1e-6F) { v = {}; continue; } }
-      else v.envelope = std::min(1.0F, v.envelope + 1.0F / (0.010F * sampleRate_));
+      else v.envelope = std::min(1.0F, v.envelope + 1.0F / (activePlan_->attackSeconds * sampleRate_));
       v.smoothGlide += smoothing * (v.glide-v.smoothGlide);
       v.smoothSlide += smoothing * (v.slide-v.smoothSlide);
       const float position = v.phase * kTableSize;
@@ -84,8 +86,12 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
       const float mb = activePlan_->morphTable[(index+1) % kTableSize];
       const float base = a + fraction * (b-a);
       const float morph = ma + fraction * (mb-ma);
-      input += (base + v.smoothSlide*(morph-base)) * v.gain * v.press * v.envelope * 0.125F;
-      v.phase += v.increment * std::pow(2.0F, v.smoothGlide);
+      const float slide = std::clamp(v.smoothSlide * activePlan_->slideResponse, 0.0F, 1.0F);
+      const float pressure = activePlan_->pressureResponse == 0.0F
+                                 ? 1.0F
+                                 : std::pow(std::max(0.0F, v.press), activePlan_->pressureResponse);
+      input += (base + slide*(morph-base)) * v.gain * pressure * v.envelope * activePlan_->gain * 0.125F;
+      v.phase += v.increment * std::pow(2.0F, v.smoothGlide * activePlan_->glideSemitones / 12.0F);
       v.phase -= std::floor(v.phase);
     }
     const float dc = input - previousInput_ + 0.997F * previousOutput_;

@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <chrono>
+#include <cmath>
 #include <new>
 #include <span>
 #include <string_view>
@@ -100,6 +101,34 @@ static int prepareInitial(LWKernelRef* kernel,const latticewake::Scene& scene,co
   kernel->roleSampleOffset=0; kernel->rolePlanIndex=0; kernel->activeRoleNotes={{-1,-1,-1,-1}};
   return 1;
 }
+
+static bool buildSceneDocumentPlan(const char* json, const double rate, latticewake::RenderPlan& output) {
+  if(!json) return false;
+  latticewake::SceneSerializationError parseError;
+  latticewake::RenderPlanError renderError;
+  latticewake::RenderPlanBuilder builder;
+  if(const auto sceneV1=latticewake::parseSceneV1(json,parseError))
+    return builder.build(*sceneV1,rate,output,renderError);
+  if(const auto sceneV0=latticewake::parseSceneV0(json,parseError))
+    return builder.build(*sceneV0,rate,output,renderError);
+  return false;
+}
+
+static int prepareInitialDocument(LWKernelRef* kernel, const char* json, const double rate) {
+  if(!kernel||kernel->renderBegun.load(std::memory_order_acquire)||
+     !buildSceneDocumentPlan(json,rate,kernel->plans[0].plan)||
+     !kernel->plans[0].kernel.activate(kernel->plans[0].plan.terrain)) return 0;
+  kernel->plans[0].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  kernel->activePlan.store(0,std::memory_order_release);
+  kernel->pendingPlan.store(kNoPlan,std::memory_order_release);
+  kernel->callbackSampleRate=rate;
+  kernel->rolesRunning.store(false,std::memory_order_release);
+  kernel->roleStartRequested.store(false,std::memory_order_release);
+  kernel->roleStopRequested.store(false,std::memory_order_release);
+  kernel->activeRoleLanes.store(0,std::memory_order_release);
+  kernel->roleSampleOffset=0; kernel->rolePlanIndex=0; kernel->activeRoleNotes={{-1,-1,-1,-1}};
+  return 1;
+}
 static int publishPlan(LWKernelRef* kernel,const latticewake::Scene& scene,const double rate) {
   if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
   const std::uint32_t active=kernel->activePlan.load(std::memory_order_acquire);
@@ -111,10 +140,20 @@ static int publishPlan(LWKernelRef* kernel,const latticewake::Scene& scene,const
   kernel->pendingPlan.store(candidate,std::memory_order_release);
   return 1;
 }
+static int publishDocumentPlan(LWKernelRef* kernel,const char* json,const double rate) {
+  if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
+  const std::uint32_t active=kernel->activePlan.load(std::memory_order_acquire);
+  const std::uint32_t candidate=1U-active;
+  if(!buildSceneDocumentPlan(json,rate,kernel->plans[candidate].plan)||
+     !kernel->plans[candidate].kernel.activate(kernel->plans[candidate].plan.terrain)) return 0;
+  kernel->plans[candidate].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  kernel->pendingPlan.store(candidate,std::memory_order_release);
+  return 1;
+}
 int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return prepareInitial(kernel,demoScene(),rate); }
-int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);return scene?prepareInitial(kernel,*scene,rate):0; }
+int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { return prepareInitialDocument(kernel,json,rate); }
 int lw_kernel_publish_demo(LWKernelRef* kernel,double rate) { return publishPlan(kernel,demoScene(),rate); }
-int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { if(!kernel||!json)return 0;latticewake::SceneSerializationError error;const auto scene=latticewake::parseSceneDocument(json,error);return scene?publishPlan(kernel,*scene,rate):0; }
+int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { return publishDocumentPlan(kernel,json,rate); }
 int lw_terrain_frame_scene_json(const char* json,const unsigned long long sampleOffset,const double startPhase,const double phaseStep,LWTerrainFramePoint* points,const unsigned int capacity,unsigned int* pointCount) {
   if(!json||!points||!pointCount||capacity==0)return 0;
   latticewake::SceneSerializationError parseError;
@@ -143,6 +182,46 @@ int lw_scene_apply_role_control(const char* json,const unsigned int roleIndex,co
   std::optional<std::string> serialized;
   if(v1){v1->compatibilityScene=*scene;v1->lanes[roleIndex].role=role;serialized=latticewake::serializeSceneV1(*v1,error);}
   else serialized=latticewake::serializeSceneV0(*scene,error);
+  if(!serialized)return 0;
+  char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;
+  std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;
+}
+int lw_scene_editor_controls(const char* json,LWSceneEditorControls* controls) {
+  if(!json||!controls)return 0;
+  latticewake::SceneSerializationError error;
+  const auto v1=latticewake::parseSceneV1(json,error);
+  const auto v0=v1?std::optional<latticewake::Scene>(v1->compatibilityScene):latticewake::parseSceneV0(json,error);
+  if(!v0)return 0;
+  const auto& terrain=v0->terrain; const auto& path=v0->path;
+  const auto articulation=v1?v1->articulation:latticewake::ArticulationComponent{};
+  *controls={terrain.detail,terrain.zoom,terrain.offsetX,terrain.offsetY,path.rateRatio,path.radiusX,path.radiusY,path.angle,path.translationX,path.translationY,
+             articulation.attackSeconds,articulation.releaseSeconds,articulation.gain,articulation.glideSemitones,
+             articulation.velocityResponse,articulation.pressureResponse,articulation.slideResponse};
+  return 1;
+}
+int lw_scene_apply_editor_controls(const char* json,const LWSceneEditorControls* controls,char** canonicalJson) {
+  if(!json||!controls||!canonicalJson)return 0;
+  const double values[]={controls->terrain_detail,controls->terrain_zoom,controls->terrain_offset_x,controls->terrain_offset_y,
+                         controls->traversal_rate_ratio,controls->traversal_radius_x,controls->traversal_radius_y,controls->traversal_angle,
+                         controls->traversal_translation_x,controls->traversal_translation_y,controls->attack_seconds,controls->release_seconds,
+                         controls->gain,controls->glide_semitones,controls->velocity_response,controls->pressure_response,controls->slide_response};
+  for(const double value:values) if(!std::isfinite(value))return 0;
+  latticewake::SceneSerializationError error;
+  auto v1=latticewake::parseSceneV1(json,error);
+  if(!v1)return 0;
+  auto& scene=v1->compatibilityScene;
+  scene.terrain.detail=controls->terrain_detail; scene.terrain.zoom=controls->terrain_zoom;
+  scene.terrain.offsetX=controls->terrain_offset_x; scene.terrain.offsetY=controls->terrain_offset_y;
+  scene.path.rateRatio=controls->traversal_rate_ratio; scene.path.radiusX=controls->traversal_radius_x;
+  scene.path.radiusY=controls->traversal_radius_y; scene.path.angle=controls->traversal_angle;
+  scene.path.translationX=controls->traversal_translation_x; scene.path.translationY=controls->traversal_translation_y;
+  for(auto& layer:v1->surface.layers) if(layer.sourceType==latticewake::SurfaceSourceType::analytic) layer.analytic=scene.terrain;
+  v1->traversal.path=scene.path;
+  v1->articulation.attackSeconds=controls->attack_seconds; v1->articulation.releaseSeconds=controls->release_seconds;
+  v1->articulation.gain=controls->gain; v1->articulation.glideSemitones=controls->glide_semitones;
+  v1->articulation.velocityResponse=controls->velocity_response; v1->articulation.pressureResponse=controls->pressure_response;
+  v1->articulation.slideResponse=controls->slide_response;
+  const auto serialized=latticewake::serializeSceneV1(*v1,error);
   if(!serialized)return 0;
   char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;
   std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;

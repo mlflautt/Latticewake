@@ -10,6 +10,13 @@ struct PreparedTerrainPlan {
   std::array<float, 2048> morphTable{};
   float sampleRate{};
   float variation{};
+  float attackSeconds{0.010F};
+  float releaseSeconds{0.120F};
+  float gain{1.0F};
+  float glideSemitones{12.0F};
+  float velocityResponse{1.0F};
+  float pressureResponse{1.0F};
+  float slideResponse{1.0F};
   bool ready{};
 };
 bool prepareTerrainPlan(const Scene& scene, double sampleRate, PreparedTerrainPlan& plan) noexcept;

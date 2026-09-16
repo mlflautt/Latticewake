@@ -233,6 +233,23 @@ void testSceneV1MigrationAndRenderPlan() {
   assert(renderPlan.ready && renderPlan.sceneId == source.sceneId);
   assert(renderPlan.terrain.terrainTable == legacyPlan.terrainTable);
   assert(renderPlan.terrain.morphTable == legacyPlan.morphTable);
+  RenderPlan articulatedPlan;
+  SceneV1 articulated = migrated;
+  articulated.articulation.attackSeconds = 0.040;
+  articulated.articulation.releaseSeconds = 0.240;
+  articulated.articulation.gain = 0.5;
+  articulated.articulation.glideSemitones = 7.0;
+  articulated.articulation.velocityResponse = 0.25;
+  articulated.articulation.pressureResponse = 0.5;
+  articulated.articulation.slideResponse = 0.75;
+  assert(RenderPlanBuilder{}.build(articulated, 48000, articulatedPlan, renderError));
+  assert(articulatedPlan.terrain.attackSeconds == 0.040F);
+  assert(articulatedPlan.terrain.releaseSeconds == 0.240F);
+  assert(articulatedPlan.terrain.gain == 0.5F);
+  assert(articulatedPlan.terrain.glideSemitones == 7.0F);
+  assert(articulatedPlan.terrain.velocityResponse == 0.25F);
+  assert(articulatedPlan.terrain.pressureResponse == 0.5F);
+  assert(articulatedPlan.terrain.slideResponse == 0.75F);
   RoleEventGenerationError roleError;
   const auto legacyTrace = generateRoleEvents(source, 0, renderPlan.roleLoopFrames,
                                                {48000, source.harmonicContext.tempoBPM}, roleError);

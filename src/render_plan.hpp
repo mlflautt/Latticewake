@@ -1,6 +1,7 @@
 #pragma once
 
 #include "realtime_kernel.hpp"
+#include "scene_v1.hpp"
 
 #include <array>
 #include <cstdint>
@@ -33,6 +34,8 @@ struct RenderPlanError { std::string field; std::string message; };
 class RenderPlanBuilder {
  public:
   [[nodiscard]] bool build(const Scene& scene, double sampleRate, RenderPlan& output,
+                           RenderPlanError& error) const;
+  [[nodiscard]] bool build(const SceneV1& scene, double sampleRate, RenderPlan& output,
                            RenderPlanError& error) const;
 };
 

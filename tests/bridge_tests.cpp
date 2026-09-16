@@ -145,6 +145,36 @@ void testSceneV1BridgeMigrationAndPreparation() {
   assert(lw_kernel_render(legacyKernel, legacyOutput.data(), static_cast<unsigned int>(legacyOutput.size())) == 1);
   assert(output == legacyOutput);
 
+  LWSceneEditorControls editor{};
+  assert(lw_scene_editor_controls(first, &editor) == 1);
+  assert(editor.attack_seconds == 0.010);
+  editor.terrain_detail = 0.75;
+  editor.terrain_zoom = 0.0;
+  editor.traversal_rate_ratio = 1.0;
+  editor.traversal_radius_y = 0.20;
+  editor.traversal_translation_x = 0.60;
+  editor.attack_seconds = 0.040;
+  editor.release_seconds = 0.240;
+  editor.gain = 0.5;
+  char* editedEditor = nullptr;
+  assert(lw_scene_apply_editor_controls(first, &editor, &editedEditor) == 1);
+  assert(editedEditor != nullptr);
+  LWSceneEditorControls roundTripEditor{};
+  assert(lw_scene_editor_controls(editedEditor, &roundTripEditor) == 1);
+  assert(roundTripEditor.terrain_detail == editor.terrain_detail);
+  assert(roundTripEditor.traversal_radius_y == editor.traversal_radius_y);
+  assert(roundTripEditor.attack_seconds == editor.attack_seconds);
+  assert(roundTripEditor.gain == editor.gain);
+  LWKernelRef* const editedKernel = lw_kernel_create();
+  assert(editedKernel != nullptr);
+  assert(lw_kernel_prepare_scene_json(editedKernel, editedEditor, 48000.0) == 1);
+  std::array<float, 512> editedOutput{};
+  assert(lw_kernel_note_on(editedKernel, 60, 0.7F) == 1);
+  assert(lw_kernel_render(editedKernel, editedOutput.data(), static_cast<unsigned int>(editedOutput.size())) == 1);
+  assert(editedOutput != output);
+  lw_kernel_destroy(editedKernel);
+  lw_string_destroy(editedEditor);
+
   LWRoleControl control{};
   assert(lw_scene_role_control(first, 0, &control) == 1);
   control.density = 0.75F;

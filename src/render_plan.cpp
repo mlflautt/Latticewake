@@ -72,4 +72,23 @@ bool RenderPlanBuilder::build(const Scene& scene, const double sampleRate, Rende
   return true;
 }
 
+bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate, RenderPlan& output,
+                              RenderPlanError& error) const {
+  const ValidationIssues validation = validateSceneV1(scene);
+  if (!validation.empty()) {
+    error = {validation.front().field, validation.front().message};
+    return false;
+  }
+  if (!build(scene.compatibilityScene, sampleRate, output, error)) return false;
+  const auto& articulation = scene.articulation;
+  output.terrain.attackSeconds = std::max(0.001F, static_cast<float>(articulation.attackSeconds));
+  output.terrain.releaseSeconds = std::max(0.001F, static_cast<float>(articulation.releaseSeconds));
+  output.terrain.gain = static_cast<float>(articulation.gain);
+  output.terrain.glideSemitones = static_cast<float>(articulation.glideSemitones);
+  output.terrain.velocityResponse = static_cast<float>(articulation.velocityResponse);
+  output.terrain.pressureResponse = static_cast<float>(articulation.pressureResponse);
+  output.terrain.slideResponse = static_cast<float>(articulation.slideResponse);
+  return true;
+}
+
 }  // namespace latticewake
