@@ -6,7 +6,8 @@ kill existing app instances, or modify saved scenes.
 
 ## Standard loop
 
-1. Rebuild and code-sign the exact app revision.
+1. Rebuild and code-sign the exact app revision, then run `make bundle-verify`.
+   It proves the app-bundle executable byte-matches SwiftPM's current product.
 2. Run `make crash-baseline`. This writes app version, build number, binary
    SHA-256, Mach-O UUID, timestamp, and the known report set under
    `build/crash-triage/`.
@@ -27,6 +28,8 @@ kill existing app instances, or modify saved scenes.
 - A report’s version, binary SHA-256, and UUID must match the build under test.
   A report from a prior process or an app bundle replaced in place is stale
   evidence and must be labelled as such.
+- Never diagnose runtime behavior from `swift test` alone: package verification
+  is required before a standalone launch claim.
 - Do not use an automated result to infer listening quality or artistic merit.
 - Keep failing reports. A fix must cite the report’s faulting thread and
   relevant frames, then add a regression at that boundary.

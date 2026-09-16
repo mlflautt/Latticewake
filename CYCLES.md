@@ -338,3 +338,12 @@ byte-preserved legacy files, and equivalent migrated render fixtures.
   fault classification, and handoff evidence bundle.
 - Entry points: `make crash-baseline`, `make crash-smoke`, and
   `make crash-report`; see `docs/CRASH_TRIAGE_PROTOCOL.md`.
+
+### Cycle 036 — standalone build identity and idle baseline
+
+- Scope: package the current SwiftPM product rather than a stale hard-coded
+  build location; verify code UUID and signature before standalone claims.
+- Evidence: the exact final bundle sampled at 0% idle CPU over five seconds
+  with no new crash report. See `handoffs/cycle-036.md`.
+- Retained work: explicit MIDI endpoint admission, Metal idle-cost admission,
+  and audible gesture review remain separate gates.

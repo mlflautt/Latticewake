@@ -8,7 +8,7 @@ CORE_SOURCES = src/scene.cpp src/scene_v1.cpp src/event_trace.cpp src/terrain_ev
 TEST_SOURCES = tests/core_tests.cpp
 BRIDGE_SOURCES = app/Bridge/LatticewakeBridge.cpp tests/bridge_tests.cpp
 
-.PHONY: test clean crash-baseline crash-smoke crash-report
+.PHONY: test clean crash-baseline crash-smoke crash-report bundle-verify
 
 test: $(TEST_BIN) $(BRIDGE_TEST_BIN) $(BUILD_DIR)/playable_tests
 	$(TEST_BIN)
@@ -38,3 +38,6 @@ crash-smoke:
 
 crash-report:
 	zsh scripts/triage_macos_crash.sh report
+
+bundle-verify:
+	zsh scripts/verify_macos_bundle.sh

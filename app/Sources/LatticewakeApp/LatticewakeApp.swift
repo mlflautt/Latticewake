@@ -25,7 +25,7 @@ struct ContentView: View {
   @State private var inspectorOpen = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   var body: some View {
-    ScrollView {
+    VStack {
       VStack(spacing: 14) {
       HStack(alignment: .firstTextBaseline) {
         VStack(alignment: .leading, spacing: 2) {
