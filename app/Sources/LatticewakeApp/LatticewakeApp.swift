@@ -21,6 +21,8 @@ struct ContentView: View {
   @State private var performance = PerformanceSettingsV1()
   @State private var editorControls = SceneEditorControls()
   @State private var modulationControls = ModulationControls()
+  @State private var previewABytes: Data?
+  @State private var previewActive = false
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
   @State private var libraryOpen = false
@@ -57,6 +59,7 @@ struct ContentView: View {
       }
       Text(sceneURL == nil ? "Unsaved scene\(isDirty ? " • changed" : "")" : "\(sceneURL!.lastPathComponent)\(isDirty ? " • unsaved changes" : "")")
         .font(.caption).foregroundStyle(.secondary)
+      if previewActive { Text("Preview active — Return restores the current scene.").font(.caption).foregroundStyle(.orange) }
       if !terrain.snapshot.points.isEmpty,
          (terrain.snapshot.points.map(\.value).max() ?? 0) - (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001 {
         Text("This path produces no sustained tone.").foregroundStyle(.orange)
@@ -106,7 +109,10 @@ struct ContentView: View {
           if inspectorOpen {
             StageDrawer(title: "Inspector", color: .purple) {
               Text("Surface · Traversal · Articulation").font(.caption)
-              SceneEditorView(controls: $editorControls, apply: applyEditorChanges)
+              SceneEditorView(controls: $editorControls, apply: applyEditorChanges,
+                              preview: previewEditorChanges, captureA: { previewABytes = sceneBytes },
+                              previewA: previewA, returnToCurrent: returnToCurrent,
+                              hasA: previewABytes != nil)
               ModulationControlsView(controls: $modulationControls, apply: applyModulationChanges)
               Text(reduceMotion ? "Reduced motion active" : "Live snapshot display").font(.caption2).foregroundStyle(.secondary)
               Button("Close Inspector") { inspectorOpen = false }.font(.caption)
@@ -189,6 +195,33 @@ struct ContentView: View {
     } catch { self.error = error.localizedDescription }
   }
 
+  private func previewEditorChanges() {
+    do { try previewTemporary(SceneEditorBridge.apply(editorControls, to: sceneBytes), label: "Candidate preview") }
+    catch { self.error = error.localizedDescription }
+  }
+
+  private func previewA() {
+    guard let previewABytes else { return }
+    do { try previewTemporary(previewABytes, label: "A preview") }
+    catch { self.error = error.localizedDescription }
+  }
+
+  private func previewTemporary(_ bytes: Data, label: String) throws {
+    try audio.setScene(bytes: bytes)
+    try terrain.prepare(sceneBytes: bytes)
+    previewActive = true
+    receipt = "\(label) • Return restores current scene"
+  }
+
+  private func returnToCurrent() {
+    do {
+      try audio.setScene(bytes: sceneBytes)
+      try terrain.prepare(sceneBytes: sceneBytes)
+      previewActive = false
+      receipt = String(SceneLibrary.receipt(for: sceneBytes).sha256.prefix(12))
+    } catch { self.error = error.localizedDescription }
+  }
+
   private func applyModulationChanges() {
     do {
       let updated = try ModulationBridge.apply(modulationControls, to: sceneBytes)
@@ -208,6 +241,7 @@ struct ContentView: View {
     sceneURL = url
     receipt = String(SceneLibrary.receipt(for: bytes).sha256.prefix(12))
     isDirty = dirty
+    previewActive = false
     error = ""
   }
 

@@ -50,6 +50,35 @@ struct SceneEditorControls: Equatable {
   var slideResponse: Double = 1
 }
 
+enum SceneEditorPreset: String, CaseIterable, Identifiable {
+  case luminousBasin = "Luminous Basin"
+  case orbitingRidge = "Orbiting Ridge"
+  case softArrival = "Soft Arrival"
+  case responsiveEdge = "Responsive Edge"
+
+  var id: String { rawValue }
+
+  func applying(to current: SceneEditorControls) -> SceneEditorControls {
+    var result = current
+    switch self {
+    case .luminousBasin:
+      result.terrainDetail = 0.68; result.terrainZoom = 0.16
+      result.terrainOffsetX = 0.59; result.terrainOffsetY = 0.43
+    case .orbitingRidge:
+      result.traversalRateRatio = 0.82; result.traversalRadiusX = 0.76
+      result.traversalRadiusY = 0.24; result.traversalAngle = 0.18
+      result.traversalTranslationX = 0.63; result.traversalTranslationY = 0.46
+    case .softArrival:
+      result.attackSeconds = 0.18; result.releaseSeconds = 0.72
+      result.gain = 0.72; result.velocityResponse = 0.55
+    case .responsiveEdge:
+      result.attackSeconds = 0.008; result.releaseSeconds = 0.16
+      result.glideSemitones = 17; result.pressureResponse = 1.35; result.slideResponse = 0.9
+    }
+    return result
+  }
+}
+
 enum SceneEditorBridge {
   static func controls(from bytes: Data) throws -> SceneEditorControls {
     guard let json = String(data: bytes, encoding: .utf8) else { throw editorError(50) }
@@ -98,6 +127,11 @@ enum SceneEditorBridge {
 struct SceneEditorView: View {
   @Binding var controls: SceneEditorControls
   let apply: () -> Void
+  let preview: () -> Void
+  let captureA: () -> Void
+  let previewA: () -> Void
+  let returnToCurrent: () -> Void
+  let hasA: Bool
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
@@ -124,6 +158,17 @@ struct SceneEditorView: View {
         slider("Pressure", $controls.pressureResponse, 0...2)
         slider("Slide", $controls.slideResponse, 0...1)
       }
+      Menu("Component Presets") {
+        ForEach(SceneEditorPreset.allCases) { preset in
+          Button(preset.rawValue) { controls = preset.applying(to: controls) }
+        }
+      }
+      HStack {
+        Button("Preview Candidate", action: preview)
+        Button("Set A", action: captureA)
+        Button("Preview A", action: previewA).disabled(!hasA)
+        Button("Return", action: returnToCurrent)
+      }.buttonStyle(.bordered)
       Text("Changes are prepared outside audio and applied together.")
         .font(.caption2).foregroundStyle(.secondary)
       Button("Apply Scene Changes", action: apply).buttonStyle(.borderedProminent)

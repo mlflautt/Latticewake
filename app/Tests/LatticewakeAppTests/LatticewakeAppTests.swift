@@ -236,6 +236,17 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(try ModulationBridge.controls(from: applied), controls)
   }
 
+  func testComponentPresetsAreDeterministicAndScoped() {
+    let base = SceneEditorControls()
+    let surface = SceneEditorPreset.luminousBasin.applying(to: base)
+    XCTAssertNotEqual(surface.terrainDetail, base.terrainDetail)
+    XCTAssertEqual(surface.attackSeconds, base.attackSeconds)
+    let traversal = SceneEditorPreset.orbitingRidge.applying(to: base)
+    XCTAssertNotEqual(traversal.traversalRadiusX, base.traversalRadiusX)
+    XCTAssertEqual(traversal.terrainDetail, base.terrainDetail)
+    XCTAssertEqual(SceneEditorPreset.softArrival.applying(to: base), SceneEditorPreset.softArrival.applying(to: base))
+  }
+
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
