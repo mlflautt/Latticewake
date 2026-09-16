@@ -90,6 +90,11 @@ int lw_scene_apply_modulation_controls(const char* json, const LWModulationContr
 int lw_role_preview_scene_json(const char* json, unsigned long long start_sample,
                                unsigned long long frames, double sample_rate,
                                LWRoleTraceSummary* summary);
+int lw_role_preview_lane_event_counts_scene_json(const char* json,
+                                                 unsigned long long start_sample,
+                                                 unsigned long long frames,
+                                                 double sample_rate,
+                                                 unsigned long long lane_event_counts[4]);
 int lw_scene_migrate_v1_json(const char* json, const char* source_hash, char** canonical_json);
 void lw_string_destroy(char* value);
 int lw_kernel_note_on(LWKernelRef* kernel, int note, float velocity);

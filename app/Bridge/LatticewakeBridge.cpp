@@ -324,6 +324,25 @@ int lw_role_preview_scene_json(const char* json,const unsigned long long startSa
   *summary={static_cast<unsigned long long>(events.size()),events.empty()?0ULL:events.front().sampleOffset,events.empty()?0ULL:events.back().sampleOffset,fnv1a64(bytes)};
   return 1;
 }
+int lw_role_preview_lane_event_counts_scene_json(const char* json,const unsigned long long startSample,const unsigned long long frames,const double sampleRate,unsigned long long laneEventCounts[4]) {
+  if(!json||!laneEventCounts||frames==0)return 0;
+  latticewake::SceneSerializationError parseError;
+  const auto scene=latticewake::parseSceneDocument(json,parseError);
+  if(!scene)return 0;
+  latticewake::RoleEventGenerationError generationError;
+  const auto trace=latticewake::generateRoleEvents(*scene,startSample,frames,{sampleRate,scene->harmonicContext.tempoBPM},generationError);
+  if(!trace)return 0;
+  for(unsigned int index=0;index<4U;++index)laneEventCounts[index]=0ULL;
+  for(const auto& event:trace->events()) {
+    const auto lane=event.payload.find("lane");
+    if(lane==event.payload.end())continue;
+    if(lane->second=="drone")++laneEventCounts[0];
+    else if(lane->second=="pad")++laneEventCounts[1];
+    else if(lane->second=="motifA")++laneEventCounts[2];
+    else if(lane->second=="motifB")++laneEventCounts[3];
+  }
+  return 1;
+}
 int lw_scene_migrate_v1_json(const char* json,const char* sourceHash,char** canonicalJson) {
   if(!json||!sourceHash||sourceHash[0]=='\0'||!canonicalJson)return 0;
   latticewake::SceneSerializationError error;

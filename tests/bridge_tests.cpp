@@ -243,6 +243,9 @@ void testRolePreviewBoundary() {
   assert(first.first_sample == repeated.first_sample);
   assert(first.last_sample == repeated.last_sample);
   assert(first.receipt == repeated.receipt);
+  unsigned long long laneCounts[4]{};
+  assert(lw_role_preview_lane_event_counts_scene_json(kCanonicalScene, 0, 48000, 48000.0, laneCounts) == 1);
+  assert(laneCounts[0] + laneCounts[1] + laneCounts[2] + laneCounts[3] == first.event_count);
   assert(lw_role_preview_scene_json(kCanonicalScene, 0, 0, 48000.0, &first) == 0);
 }
 

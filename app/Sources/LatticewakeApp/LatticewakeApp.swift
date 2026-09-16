@@ -141,6 +141,7 @@ struct ContentView: View {
       if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
       if roleTrace.eventCount > 0 {
         Text("Role preview: \(roleTrace.eventCount) events • trace \(roleTrace.receiptText)").font(.caption).foregroundStyle(.secondary)
+        Text(roleTrace.laneSummaryText).font(.caption2).foregroundStyle(.secondary)
       }
       Text("256 immutable trace points • sample \(terrain.snapshot.sampleOffset)").font(.caption).foregroundStyle(.secondary)
       Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)

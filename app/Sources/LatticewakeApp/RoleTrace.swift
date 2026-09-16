@@ -11,16 +11,25 @@ private struct BridgeRoleTraceSummary {
   _ json: UnsafePointer<CChar>, _ startSample: UInt64, _ frames: UInt64,
   _ sampleRate: Double, _ summary: UnsafeMutablePointer<BridgeRoleTraceSummary>
 ) -> Int32
+@_silgen_name("lw_role_preview_lane_event_counts_scene_json") private func lw_role_preview_lane_event_counts_scene_json(
+  _ json: UnsafePointer<CChar>, _ startSample: UInt64, _ frames: UInt64,
+  _ sampleRate: Double, _ laneEventCounts: UnsafeMutablePointer<UInt64>
+) -> Int32
 
 struct RoleTraceSummary: Equatable {
   let eventCount: UInt64
   let firstSample: UInt64
   let lastSample: UInt64
   let receipt: UInt64
+  let laneEventCounts: [UInt64]
 
-  static let empty = RoleTraceSummary(eventCount: 0, firstSample: 0, lastSample: 0, receipt: 0)
+  static let empty = RoleTraceSummary(eventCount: 0, firstSample: 0, lastSample: 0, receipt: 0, laneEventCounts: [0, 0, 0, 0])
 
   var receiptText: String { String(receipt, radix: 16, uppercase: false).leftPadding(toLength: 16, withPad: "0") }
+  var laneSummaryText: String {
+    zip(["Drone", "Pad", "Motif A", "Motif B"], laneEventCounts)
+      .map { "\($0.0) \($0.1)" }.joined(separator: " • ")
+  }
 }
 
 private extension String {
@@ -39,7 +48,15 @@ enum RoleTraceBridge {
     guard json.withCString({ lw_role_preview_scene_json($0, startSample, frames, sampleRate, &bridge) }) != 0 else {
       throw NSError(domain: "Latticewake", code: 21, userInfo: [NSLocalizedDescriptionKey: "Role preview could not be generated."])
     }
+    var laneEventCounts = [UInt64](repeating: 0, count: 4)
+    let lanesReady = laneEventCounts.withUnsafeMutableBufferPointer { counts in
+      json.withCString { lw_role_preview_lane_event_counts_scene_json($0, startSample, frames, sampleRate, counts.baseAddress!) }
+    }
+    guard lanesReady != 0 else {
+      throw NSError(domain: "Latticewake", code: 22, userInfo: [NSLocalizedDescriptionKey: "Role lane preview could not be generated."])
+    }
     return RoleTraceSummary(eventCount: bridge.eventCount, firstSample: bridge.firstSample,
-                            lastSample: bridge.lastSample, receipt: bridge.receipt)
+                            lastSample: bridge.lastSample, receipt: bridge.receipt,
+                            laneEventCounts: laneEventCounts)
   }
 }

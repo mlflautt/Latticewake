@@ -430,9 +430,12 @@ final class LatticewakeAppTests: XCTestCase {
   let bytes = Data(DemoScene.canonicalJSON.utf8)
   let first = try RoleTraceBridge.preview(sceneBytes: bytes)
   let repeated = try RoleTraceBridge.preview(sceneBytes: bytes)
-  XCTAssertEqual(first, repeated)
-  XCTAssertGreaterThan(first.eventCount, 0)
-}
+    XCTAssertEqual(first, repeated)
+    XCTAssertGreaterThan(first.eventCount, 0)
+    XCTAssertEqual(first.laneEventCounts.count, 4)
+    XCTAssertEqual(first.laneEventCounts.reduce(0, +), first.eventCount)
+    XCTAssertTrue(first.laneSummaryText.contains("Motif A"))
+  }
 
   func testAuditionReceiptIsStructuredAndStable() {
   let receipt = AuditionReceipt(sampleRate: 48_000, callbackCount: 12,
