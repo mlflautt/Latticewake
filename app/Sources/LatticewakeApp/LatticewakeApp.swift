@@ -27,6 +27,10 @@ struct ContentView: View {
   @State private var frozenComponents = FrozenComponents()
   @State private var growProposal: GrowProposal?
   @State private var acceptedGrowReceipts: [GrowProposalReceiptV1] = []
+  @State private var acceptedAgentReceipts: [AgentProposalReceiptV1] = []
+  @State private var proposalJSON = ""
+  @State private var validatedAgentProposal: ValidatedAgentProposal?
+  @State private var proposalStatus = ""
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
   @State private var libraryOpen = false
@@ -108,6 +112,8 @@ struct ContentView: View {
               Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
               GrowControlsView(depth: $growDepth, frozen: $frozenComponents, proposal: growProposal, generate: generateGrow, preview: previewGrow, accept: acceptGrow, reject: { growProposal = nil })
               if let receipt = acceptedGrowReceipts.last { Text("Accepted variations: \(acceptedGrowReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
+              ProposalStudioView(json: $proposalJSON, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal)
+              if let receipt = acceptedAgentReceipts.last { Text("Accepted agent proposals: \(acceptedAgentReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
               Button("Close Library") { libraryOpen = false }.font(.caption)
               Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
             }
@@ -213,6 +219,35 @@ struct ContentView: View {
     } catch { self.error = error.localizedDescription }
   }
 
+  private func validateAgentProposal() {
+    do {
+      let proposal = try ProposalContractV1.decode(Data(proposalJSON.utf8))
+      let candidate = try ProposalContractV1.validatedCandidate(proposal, base: editorControls, sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256, frozen: frozenComponents)
+      validatedAgentProposal = ValidatedAgentProposal(proposal: proposal, candidate: candidate)
+      proposalStatus = "Validated \(proposal.proposalID); preview or accept explicitly."
+    } catch { validatedAgentProposal = nil; proposalStatus = error.localizedDescription }
+  }
+
+  private func previewAgentProposal() {
+    guard let validatedAgentProposal else { return }
+    do { try previewTemporary(SceneEditorBridge.apply(validatedAgentProposal.candidate, to: sceneBytes), label: "Agent proposal preview") }
+    catch { self.error = error.localizedDescription }
+  }
+
+  private func acceptAgentProposal() {
+    guard let validatedAgentProposal else { return }
+    do {
+      let candidate = try SceneEditorBridge.apply(validatedAgentProposal.candidate, to: sceneBytes)
+      let receipt = AgentProposalReceiptV1(proposal: validatedAgentProposal.proposal, candidateSceneSHA256: SceneLibrary.receipt(for: candidate).sha256)
+      try installScene(candidate, url: sceneURL, recordUndo: true, dirty: true)
+      acceptedAgentReceipts.append(receipt)
+      proposalStatus = "Accepted \(receipt.proposalID); save the scene to retain its receipt."
+      self.validatedAgentProposal = nil
+    } catch { self.error = error.localizedDescription }
+  }
+
+  private func rejectAgentProposal() { validatedAgentProposal = nil; proposalStatus = proposalJSON.isEmpty ? "" : "Proposal rejected; scene unchanged." }
+
   private func previewEditorChanges() {
     do { try previewTemporary(SceneEditorBridge.apply(editorControls, to: sceneBytes), label: "Candidate preview") }
     catch { self.error = error.localizedDescription }
@@ -248,7 +283,7 @@ struct ContentView: View {
   }
 
   private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool) throws {
-    if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts) }
+    if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts) }
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
     roles = try RoleSceneBridge.controls(from: bytes)
@@ -278,7 +313,7 @@ struct ContentView: View {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
       let migrated = try SceneDocumentBridge.canonicalV1(from: sceneBytes)
-      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance, acceptedGrowReceipts: acceptedGrowReceipts)
+      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance, acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts)
       let saved = try SceneLibrary.save(document, to: url)
       sceneBytes = migrated; sceneURL = url; isDirty = false
       receipt = "Saved Scene v1 \(String(saved.sha256.prefix(12)))"
@@ -294,6 +329,7 @@ struct ContentView: View {
       let loaded = try SceneLibrary.load(from: url)
       performance = loaded.performance
       acceptedGrowReceipts = loaded.acceptedGrowReceipts
+      acceptedAgentReceipts = loaded.acceptedAgentReceipts
       try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false)
       receipt = "Loaded \(loaded.originalSceneV0 ? "Scene v0" : "Library v1") \(String(loaded.receipt.sha256.prefix(12)))"
     } catch { self.error = error.localizedDescription }
@@ -301,7 +337,7 @@ struct ContentView: View {
 
   private func undo() {
     guard let previous = undoHistory.undo() else { return }
-    do { acceptedGrowReceipts = previous.acceptedGrowReceipts; try installScene(previous.sceneBytes, url: sceneURL, recordUndo: false, dirty: true) }
+    do { acceptedGrowReceipts = previous.acceptedGrowReceipts; acceptedAgentReceipts = previous.acceptedAgentReceipts; try installScene(previous.sceneBytes, url: sceneURL, recordUndo: false, dirty: true) }
     catch { self.error = error.localizedDescription }
   }
 

@@ -34,21 +34,24 @@ struct SceneLibraryDocumentV1: Codable, Equatable {
   var sceneJSON: String
   var performance: PerformanceSettingsV1
   var acceptedGrowReceipts: [GrowProposalReceiptV1]
+  var acceptedAgentReceipts: [AgentProposalReceiptV1]
 
-  init(sceneJSON: String, performance: PerformanceSettingsV1 = .init(), acceptedGrowReceipts: [GrowProposalReceiptV1] = []) {
+  init(sceneJSON: String, performance: PerformanceSettingsV1 = .init(), acceptedGrowReceipts: [GrowProposalReceiptV1] = [], acceptedAgentReceipts: [AgentProposalReceiptV1] = []) {
     self.schemaVersion = Self.schema
     self.sceneJSON = sceneJSON
     self.performance = performance
     self.acceptedGrowReceipts = acceptedGrowReceipts
+    self.acceptedAgentReceipts = acceptedAgentReceipts
   }
 
-  enum CodingKeys: String, CodingKey { case schemaVersion, sceneJSON, performance, acceptedGrowReceipts }
+  enum CodingKeys: String, CodingKey { case schemaVersion, sceneJSON, performance, acceptedGrowReceipts, acceptedAgentReceipts }
   init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     schemaVersion = try values.decode(String.self, forKey: .schemaVersion)
     sceneJSON = try values.decode(String.self, forKey: .sceneJSON)
     performance = try values.decode(PerformanceSettingsV1.self, forKey: .performance)
     acceptedGrowReceipts = try values.decodeIfPresent([GrowProposalReceiptV1].self, forKey: .acceptedGrowReceipts) ?? []
+    acceptedAgentReceipts = try values.decodeIfPresent([AgentProposalReceiptV1].self, forKey: .acceptedAgentReceipts) ?? []
   }
 }
 
@@ -58,6 +61,7 @@ struct LoadedSceneDocument: Equatable {
   let originalSceneV0: Bool
   let receipt: SceneReceipt
   let acceptedGrowReceipts: [GrowProposalReceiptV1]
+  let acceptedAgentReceipts: [AgentProposalReceiptV1]
 }
 
 enum SceneLibrary {
@@ -73,9 +77,9 @@ enum SceneLibrary {
       try document.performance.validate()
       let canonicalScene = try canonicalSceneV1(document.sceneJSON)
       return LoadedSceneDocument(sceneBytes: canonicalScene, performance: document.performance,
-                                 originalSceneV0: false, receipt: receipt, acceptedGrowReceipts: document.acceptedGrowReceipts)
+                                 originalSceneV0: false, receipt: receipt, acceptedGrowReceipts: document.acceptedGrowReceipts, acceptedAgentReceipts: document.acceptedAgentReceipts)
     }
-    return LoadedSceneDocument(sceneBytes: bytes, performance: .init(), originalSceneV0: true, receipt: receipt, acceptedGrowReceipts: [])
+    return LoadedSceneDocument(sceneBytes: bytes, performance: .init(), originalSceneV0: true, receipt: receipt, acceptedGrowReceipts: [], acceptedAgentReceipts: [])
   }
 
   @discardableResult static func save(_ document: SceneLibraryDocumentV1, to url: URL) throws -> SceneReceipt {
@@ -84,7 +88,8 @@ enum SceneLibrary {
     let preparedDocument = SceneLibraryDocumentV1(
       sceneJSON: String(decoding: canonicalScene, as: UTF8.self),
       performance: document.performance,
-      acceptedGrowReceipts: document.acceptedGrowReceipts
+      acceptedGrowReceipts: document.acceptedGrowReceipts,
+      acceptedAgentReceipts: document.acceptedAgentReceipts
     )
     let encoder = JSONEncoder()
     encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -108,6 +113,7 @@ enum SceneLibrary {
 struct SceneUndoEntry {
   let sceneBytes: Data
   let acceptedGrowReceipts: [GrowProposalReceiptV1]
+  let acceptedAgentReceipts: [AgentProposalReceiptV1]
 }
 
 struct SceneUndoHistory {
@@ -116,9 +122,9 @@ struct SceneUndoHistory {
 
   var canUndo: Bool { !entries.isEmpty }
 
-  mutating func record(_ bytes: Data, acceptedGrowReceipts: [GrowProposalReceiptV1]) {
-    guard entries.last?.sceneBytes != bytes || entries.last?.acceptedGrowReceipts != acceptedGrowReceipts else { return }
-    entries.append(SceneUndoEntry(sceneBytes: bytes, acceptedGrowReceipts: acceptedGrowReceipts))
+  mutating func record(_ bytes: Data, acceptedGrowReceipts: [GrowProposalReceiptV1], acceptedAgentReceipts: [AgentProposalReceiptV1]) {
+    guard entries.last?.sceneBytes != bytes || entries.last?.acceptedGrowReceipts != acceptedGrowReceipts || entries.last?.acceptedAgentReceipts != acceptedAgentReceipts else { return }
+    entries.append(SceneUndoEntry(sceneBytes: bytes, acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts))
     if entries.count > capacity { entries.removeFirst(entries.count - capacity) }
   }
 

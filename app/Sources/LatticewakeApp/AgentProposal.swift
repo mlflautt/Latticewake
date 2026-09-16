@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 /// A bounded, preview-only contract for local or external creative providers.
 /// Parsing or validating one never changes a scene, a library document, or the
@@ -42,6 +43,33 @@ struct ScenePatchProposalV1: Codable, Equatable, Identifiable {
   var id: String { proposalID }
 }
 
+struct AgentProposalReceiptV1: Codable, Equatable, Identifiable {
+  static let schema = "latticewake-agent-proposal-receipt-v1"
+  let schemaVersion: String
+  let proposalID: String
+  let provider: String
+  let baseSceneSHA256: String
+  let candidateSceneSHA256: String
+  let frozenComponents: [String]
+  let patchedFields: [String]
+  var id: String { proposalID }
+
+  init(proposal: ScenePatchProposalV1, candidateSceneSHA256: String) {
+    schemaVersion = Self.schema
+    proposalID = proposal.proposalID
+    provider = proposal.provider
+    baseSceneSHA256 = proposal.baseSceneSHA256
+    self.candidateSceneSHA256 = candidateSceneSHA256
+    frozenComponents = proposal.frozenComponents.sorted()
+    patchedFields = proposal.patches.map(\.field.rawValue).sorted()
+  }
+}
+
+struct ValidatedAgentProposal: Equatable {
+  let proposal: ScenePatchProposalV1
+  let candidate: SceneEditorControls
+}
+
 enum ProposalContractError: LocalizedError, Equatable {
   case schema, identity(String), baseScene, frozenState, patchCount, duplicateField, invalidValue(String), frozenField(String)
   var errorDescription: String? {
@@ -54,6 +82,30 @@ enum ProposalContractError: LocalizedError, Equatable {
     case .duplicateField: "A proposal may patch each field only once"
     case .invalidValue(let field): "Invalid value for \(field)"
     case .frozenField(let component): "Proposal tries to change frozen \(component)"
+    }
+  }
+}
+
+struct ProposalStudioView: View {
+  @Binding var json: String
+  let validated: ValidatedAgentProposal?
+  let status: String
+  let validate: () -> Void
+  let preview: () -> Void
+  let accept: () -> Void
+  let reject: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
+      Text("Proposal Studio").font(.caption.bold()).foregroundStyle(.purple)
+      Text("Paste a bounded ScenePatch proposal. Validation never changes the scene.").font(.caption2).foregroundStyle(.secondary)
+      TextEditor(text: $json).font(.caption.monospaced()).frame(minHeight: 90).border(.secondary.opacity(0.4))
+      HStack { Button("Validate", action: validate).buttonStyle(.borderedProminent); Button("Clear") { json = ""; reject() }.buttonStyle(.bordered) }
+      if !status.isEmpty { Text(status).font(.caption2).foregroundStyle(validated == nil ? .orange : .mint) }
+      if let validated {
+        Text("Ready: \(validated.proposal.provider) • \(validated.proposal.patches.count) patch\(validated.proposal.patches.count == 1 ? "" : "es")").font(.caption2.monospaced())
+        HStack { Button("Preview", action: preview); Button("Accept", action: accept); Button("Reject", action: reject) }.buttonStyle(.bordered)
+      }
     }
   }
 }

@@ -204,6 +204,17 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertTrue(try JSONDecoder().decode(SceneLibraryDocumentV1.self, from: Data(legacy.utf8)).acceptedGrowReceipts.isEmpty)
   }
 
+  func testAgentReceiptRoundTripsInLibraryDocument() throws {
+    let proposal = ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema, proposalID: "agent-1",
+                                        provider: "fixture-agent", baseSceneSHA256: "base",
+                                        frozenComponents: [], patches: [ProposalPatchV1(field: .gain, value: 0.7)])
+    let receipt = AgentProposalReceiptV1(proposal: proposal, candidateSceneSHA256: "candidate")
+    let document = SceneLibraryDocumentV1(sceneJSON: DemoScene.gestureJSON, acceptedAgentReceipts: [receipt])
+    let decoded = try JSONDecoder().decode(SceneLibraryDocumentV1.self, from: JSONEncoder().encode(document))
+    XCTAssertEqual(decoded.acceptedAgentReceipts, [receipt])
+    XCTAssertEqual(decoded.acceptedGrowReceipts, [])
+  }
+
   func testSceneV1MigrationIsDeterministicAndLoadable() throws {
     let source = Data(DemoScene.fourRoleJSON.utf8)
     let first = try SceneDocumentBridge.canonicalV1(from: source)
@@ -320,7 +331,7 @@ final class LatticewakeAppTests: XCTestCase {
   func testSceneUndoIsBoundedAndRestoresPrecedingBytes() {
   var history = SceneUndoHistory()
   let first = Data("first".utf8), second = Data("second".utf8)
-  history.record(first, acceptedGrowReceipts: []); history.record(first, acceptedGrowReceipts: []); history.record(second, acceptedGrowReceipts: [])
+  history.record(first, acceptedGrowReceipts: [], acceptedAgentReceipts: []); history.record(first, acceptedGrowReceipts: [], acceptedAgentReceipts: []); history.record(second, acceptedGrowReceipts: [], acceptedAgentReceipts: [])
   XCTAssertEqual(history.undo()?.sceneBytes, second)
   XCTAssertEqual(history.undo()?.sceneBytes, first)
   XCTAssertNil(history.undo())
