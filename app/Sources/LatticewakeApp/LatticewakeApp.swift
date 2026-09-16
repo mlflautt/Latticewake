@@ -112,7 +112,7 @@ struct ContentView: View {
               Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
               GrowControlsView(depth: $growDepth, frozen: $frozenComponents, proposal: growProposal, generate: generateGrow, preview: previewGrow, accept: acceptGrow, reject: { growProposal = nil })
               if let receipt = acceptedGrowReceipts.last { Text("Accepted variations: \(acceptedGrowReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
-              ProposalStudioView(json: $proposalJSON, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal)
+              ProposalStudioView(json: $proposalJSON, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal, sample: loadProposalFixture)
               if let receipt = acceptedAgentReceipts.last { Text("Accepted agent proposals: \(acceptedAgentReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
               Button("Close Library") { libraryOpen = false }.font(.caption)
               Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
@@ -226,6 +226,18 @@ struct ContentView: View {
       validatedAgentProposal = ValidatedAgentProposal(proposal: proposal, candidate: candidate)
       proposalStatus = "Validated \(proposal.proposalID); preview or accept explicitly."
     } catch { validatedAgentProposal = nil; proposalStatus = error.localizedDescription }
+  }
+
+  private func loadProposalFixture() {
+    do {
+      guard let json = try ProposalContractV1.fixtureJSON(sceneHash: SceneLibrary.receipt(for: sceneBytes).sha256, frozen: frozenComponents) else {
+        proposalStatus = "All editable components are frozen; no proposal can be generated."
+        return
+      }
+      proposalJSON = json
+      validatedAgentProposal = nil
+      proposalStatus = "Local fixture loaded. Validate it before previewing."
+    } catch { proposalStatus = error.localizedDescription }
   }
 
   private func previewAgentProposal() {

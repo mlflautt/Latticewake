@@ -294,6 +294,24 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertThrowsError(try ProposalContractV1.validatedCandidate(proposal, base: .init(), sceneHash: "other", frozen: frozen))
   }
 
+  func testProposalFixtureDrivesValidateAcceptUndoReceiptPath() throws {
+    let baseBytes = try SceneDocumentBridge.canonicalV1(from: Data(DemoScene.gestureJSON.utf8))
+    let baseControls = try SceneEditorBridge.controls(from: baseBytes)
+    let baseHash = SceneLibrary.receipt(for: baseBytes).sha256
+    let json = try XCTUnwrap(ProposalContractV1.fixtureJSON(sceneHash: baseHash, frozen: .init()))
+    let proposal = try ProposalContractV1.decode(Data(json.utf8))
+    let candidateControls = try ProposalContractV1.validatedCandidate(proposal, base: baseControls, sceneHash: baseHash, frozen: .init())
+    let candidateBytes = try SceneEditorBridge.apply(candidateControls, to: baseBytes)
+    let agentReceipt = AgentProposalReceiptV1(proposal: proposal, candidateSceneSHA256: SceneLibrary.receipt(for: candidateBytes).sha256)
+    XCTAssertNotEqual(candidateBytes, baseBytes)
+    var history = SceneUndoHistory()
+    history.record(baseBytes, acceptedGrowReceipts: [], acceptedAgentReceipts: [])
+    let restored = try XCTUnwrap(history.undo())
+    XCTAssertEqual(restored.sceneBytes, baseBytes)
+    XCTAssertEqual(restored.acceptedAgentReceipts, [])
+    XCTAssertEqual(agentReceipt.baseSceneSHA256, baseHash)
+  }
+
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

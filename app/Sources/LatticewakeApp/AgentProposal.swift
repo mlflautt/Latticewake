@@ -94,13 +94,14 @@ struct ProposalStudioView: View {
   let preview: () -> Void
   let accept: () -> Void
   let reject: () -> Void
+  let sample: () -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: 6) {
       Text("Proposal Studio").font(.caption.bold()).foregroundStyle(.purple)
       Text("Paste a bounded ScenePatch proposal. Validation never changes the scene.").font(.caption2).foregroundStyle(.secondary)
       TextEditor(text: $json).font(.caption.monospaced()).frame(minHeight: 90).border(.secondary.opacity(0.4))
-      HStack { Button("Validate", action: validate).buttonStyle(.borderedProminent); Button("Clear") { json = ""; reject() }.buttonStyle(.bordered) }
+      HStack { Button("Sample Proposal", action: sample); Button("Validate", action: validate).buttonStyle(.borderedProminent); Button("Clear") { json = ""; reject() }.buttonStyle(.bordered) }
       if !status.isEmpty { Text(status).font(.caption2).foregroundStyle(validated == nil ? .orange : .mint) }
       if let validated {
         Text("Ready: \(validated.proposal.provider) • \(validated.proposal.patches.count) patch\(validated.proposal.patches.count == 1 ? "" : "es")").font(.caption2.monospaced())
@@ -140,6 +141,25 @@ enum ProposalContractV1 {
       }
     }
     return candidate
+  }
+
+  static func fixtureJSON(sceneHash: String, frozen: FrozenComponents) throws -> String? {
+    let fields = ProposalPatchField.allCases.filter { !frozen.names.contains($0.component) }
+    guard let field = fields.first else { return nil }
+    let value: Double = switch field {
+    case .terrainDetail, .terrainZoom, .traversalRadiusX, .traversalRadiusY, .traversalTranslationX: 0.62
+    case .attackSeconds: 0.04
+    case .releaseSeconds: 0.32
+    case .gain: 0.8
+    }
+    let proposal = ScenePatchProposalV1(schemaVersion: ScenePatchProposalV1.schema,
+                                        proposalID: "local-fixture-\(String(sceneHash.prefix(12)))",
+                                        provider: "latticewake-local-fixture",
+                                        baseSceneSHA256: sceneHash,
+                                        frozenComponents: frozen.names.sorted(),
+                                        patches: [ProposalPatchV1(field: field, value: value)])
+    let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+    return String(decoding: try encoder.encode(proposal), as: UTF8.self)
   }
 
   private static func validIdentity(_ value: String) -> Bool {
