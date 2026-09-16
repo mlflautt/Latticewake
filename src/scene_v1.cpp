@@ -112,6 +112,11 @@ ValidationIssues validateSceneV1(const SceneV1& scene) {
     if (route.scope != "per-note" && route.scope != "per-lane" &&
         route.scope != "per-engine" && route.scope != "global")
       issues.push_back({"modulationGraph.routes.scope", "unsupported scope"});
+    const bool supportedRoute = (route.source == "gesture-x" && route.target == "pitch") ||
+                                (route.source == "gesture-y" && route.target == "timbre") ||
+                                (route.source == "pressure" && route.target == "gain");
+    if (!supportedRoute || route.scope != "per-note")
+      issues.push_back({"modulationGraph.routes", "unsupported source, target, or scope"});
     if (!std::isfinite(route.depth) || route.depth < -1.0 || route.depth > 1.0)
       issues.push_back({"modulationGraph.routes.depth", "must be finite and in [-1, 1]"});
   }

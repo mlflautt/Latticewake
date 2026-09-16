@@ -17,6 +17,9 @@ struct PreparedTerrainPlan {
   float velocityResponse{1.0F};
   float pressureResponse{1.0F};
   float slideResponse{1.0F};
+  float gesturePitchDepth{1.0F};
+  float gestureTimbreDepth{1.0F};
+  float pressureGainDepth{1.0F};
   bool ready{};
 };
 bool prepareTerrainPlan(const Scene& scene, double sampleRate, PreparedTerrainPlan& plan) noexcept;

@@ -86,12 +86,16 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
       const float mb = activePlan_->morphTable[(index+1) % kTableSize];
       const float base = a + fraction * (b-a);
       const float morph = ma + fraction * (mb-ma);
-      const float slide = std::clamp(v.smoothSlide * activePlan_->slideResponse, 0.0F, 1.0F);
+      const float routedSlide = activePlan_->gestureTimbreDepth >= 0.0F
+                                    ? v.smoothSlide * activePlan_->gestureTimbreDepth
+                                    : (1.0F - v.smoothSlide) * -activePlan_->gestureTimbreDepth;
+      const float slide = std::clamp(routedSlide * activePlan_->slideResponse, 0.0F, 1.0F);
       const float pressure = activePlan_->pressureResponse == 0.0F
                                  ? 1.0F
                                  : std::pow(std::max(0.0F, v.press), activePlan_->pressureResponse);
-      input += (base + slide*(morph-base)) * v.gain * pressure * v.envelope * activePlan_->gain * 0.125F;
-      v.phase += v.increment * std::pow(2.0F, v.smoothGlide * activePlan_->glideSemitones / 12.0F);
+      const float routedPressure = std::max(0.0F, 1.0F + activePlan_->pressureGainDepth * (pressure - 1.0F));
+      input += (base + slide*(morph-base)) * v.gain * routedPressure * v.envelope * activePlan_->gain * 0.125F;
+      v.phase += v.increment * std::pow(2.0F, v.smoothGlide * activePlan_->gesturePitchDepth * activePlan_->glideSemitones / 12.0F);
       v.phase -= std::floor(v.phase);
     }
     const float dc = input - previousInput_ + 0.997F * previousOutput_;

@@ -226,6 +226,42 @@ int lw_scene_apply_editor_controls(const char* json,const LWSceneEditorControls*
   char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;
   std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;
 }
+int lw_scene_modulation_controls(const char* json,LWModulationControls* controls) {
+  if(!json||!controls)return 0;
+  latticewake::SceneSerializationError error;
+  const auto v1=latticewake::parseSceneV1(json,error);
+  if(!v1) {
+    if(!latticewake::parseSceneV0(json,error)) return 0;
+    *controls={1U,1.0F,1U,1.0F,1U,1.0F}; return 1;
+  }
+  *controls={0U,0.0F,0U,0.0F,0U,0.0F};
+  if(v1->modulation.routes.empty()) { *controls={1U,1.0F,1U,1.0F,1U,1.0F}; return 1; }
+  for(const auto& route:v1->modulation.routes) {
+    if(route.source=="gesture-x") { controls->pitch_enabled=1U; controls->pitch_depth=static_cast<float>(route.depth); }
+    else if(route.source=="gesture-y") { controls->timbre_enabled=1U; controls->timbre_depth=static_cast<float>(route.depth); }
+    else if(route.source=="pressure") { controls->gain_enabled=1U; controls->gain_depth=static_cast<float>(route.depth); }
+  }
+  return 1;
+}
+int lw_scene_apply_modulation_controls(const char* json,const LWModulationControls* controls,char** canonicalJson) {
+  if(!json||!controls||!canonicalJson||controls->pitch_enabled>1U||controls->timbre_enabled>1U||controls->gain_enabled>1U||
+     !std::isfinite(controls->pitch_depth)||!std::isfinite(controls->timbre_depth)||!std::isfinite(controls->gain_depth)||
+     controls->pitch_depth < -1.0F||controls->pitch_depth > 1.0F||controls->timbre_depth < -1.0F||controls->timbre_depth > 1.0F||controls->gain_depth < -1.0F||controls->gain_depth > 1.0F)return 0;
+  latticewake::SceneSerializationError error;
+  auto v1=latticewake::parseSceneV1(json,error);
+  if(!v1)return 0;
+  v1->modulation.routes.clear();
+  const auto add=[&](const unsigned int enabled,const float depth,const char* suffix,const char* source,const char* target) {
+    if(enabled!=0U) v1->modulation.routes.push_back({v1->sceneId+":route:"+suffix,source,target,"per-note",depth});
+  };
+  add(controls->pitch_enabled,controls->pitch_depth,"gesture-x-pitch","gesture-x","pitch");
+  add(controls->timbre_enabled,controls->timbre_depth,"gesture-y-timbre","gesture-y","timbre");
+  add(controls->gain_enabled,controls->gain_depth,"pressure-gain","pressure","gain");
+  const auto serialized=latticewake::serializeSceneV1(*v1,error);
+  if(!serialized)return 0;
+  char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;
+  std::memcpy(result,serialized->c_str(),serialized->size()+1U);*canonicalJson=result;return 1;
+}
 int lw_role_preview_scene_json(const char* json,const unsigned long long startSample,const unsigned long long frames,const double sampleRate,LWRoleTraceSummary* summary) {
   if(!json||!summary||frames==0)return 0;
   latticewake::SceneSerializationError parseError;

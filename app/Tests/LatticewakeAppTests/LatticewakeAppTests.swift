@@ -224,6 +224,18 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(try SceneEditorBridge.controls(from: applied), edited)
   }
 
+  func testModulationControlsMigrateAndRoundTrip() throws {
+    var controls = try ModulationBridge.controls(from: Data(DemoScene.gestureJSON.utf8))
+    XCTAssertTrue(controls.pitchEnabled && controls.timbreEnabled && controls.gainEnabled)
+    controls.pitchDepth = 0.5
+    controls.timbreEnabled = false
+    controls.timbreDepth = 0
+    controls.gainDepth = -0.25
+    let applied = try ModulationBridge.apply(controls, to: Data(DemoScene.gestureJSON.utf8))
+    XCTAssertTrue(String(decoding: applied, as: UTF8.self).contains("\"gesture-x\""))
+    XCTAssertEqual(try ModulationBridge.controls(from: applied), controls)
+  }
+
   func testSceneLibraryRejectsInvalidEmbeddedSceneAndPerformance() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

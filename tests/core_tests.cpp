@@ -242,6 +242,10 @@ void testSceneV1MigrationAndRenderPlan() {
   articulated.articulation.velocityResponse = 0.25;
   articulated.articulation.pressureResponse = 0.5;
   articulated.articulation.slideResponse = 0.75;
+  articulated.modulation.routes = {
+      {"route-pitch", "gesture-x", "pitch", "per-note", 0.5},
+      {"route-timbre", "gesture-y", "timbre", "per-note", -0.25},
+      {"route-gain", "pressure", "gain", "per-note", 0.75}};
   assert(RenderPlanBuilder{}.build(articulated, 48000, articulatedPlan, renderError));
   assert(articulatedPlan.terrain.attackSeconds == 0.040F);
   assert(articulatedPlan.terrain.releaseSeconds == 0.240F);
@@ -250,6 +254,9 @@ void testSceneV1MigrationAndRenderPlan() {
   assert(articulatedPlan.terrain.velocityResponse == 0.25F);
   assert(articulatedPlan.terrain.pressureResponse == 0.5F);
   assert(articulatedPlan.terrain.slideResponse == 0.75F);
+  assert(articulatedPlan.terrain.gesturePitchDepth == 0.5F);
+  assert(articulatedPlan.terrain.gestureTimbreDepth == -0.25F);
+  assert(articulatedPlan.terrain.pressureGainDepth == 0.75F);
   RoleEventGenerationError roleError;
   const auto legacyTrace = generateRoleEvents(source, 0, renderPlan.roleLoopFrames,
                                                {48000, source.harmonicContext.tempoBPM}, roleError);

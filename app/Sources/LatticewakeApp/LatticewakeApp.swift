@@ -20,6 +20,7 @@ struct ContentView: View {
   @State private var roleTrace = RoleTraceSummary.empty
   @State private var performance = PerformanceSettingsV1()
   @State private var editorControls = SceneEditorControls()
+  @State private var modulationControls = ModulationControls()
   @State private var undoHistory = SceneUndoHistory()
   @State private var isDirty = false
   @State private var libraryOpen = false
@@ -106,6 +107,7 @@ struct ContentView: View {
             StageDrawer(title: "Inspector", color: .purple) {
               Text("Surface · Traversal · Articulation").font(.caption)
               SceneEditorView(controls: $editorControls, apply: applyEditorChanges)
+              ModulationControlsView(controls: $modulationControls, apply: applyModulationChanges)
               Text(reduceMotion ? "Reduced motion active" : "Live snapshot display").font(.caption2).foregroundStyle(.secondary)
               Button("Close Inspector") { inspectorOpen = false }.font(.caption)
             }
@@ -187,12 +189,20 @@ struct ContentView: View {
     } catch { self.error = error.localizedDescription }
   }
 
+  private func applyModulationChanges() {
+    do {
+      let updated = try ModulationBridge.apply(modulationControls, to: sceneBytes)
+      try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
+    } catch { self.error = error.localizedDescription }
+  }
+
   private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool) throws {
     if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes) }
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
     roles = try RoleSceneBridge.controls(from: bytes)
     editorControls = try SceneEditorBridge.controls(from: bytes)
+    modulationControls = try ModulationBridge.controls(from: bytes)
     roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
     sceneBytes = bytes
     sceneURL = url

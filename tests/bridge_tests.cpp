@@ -175,6 +175,21 @@ void testSceneV1BridgeMigrationAndPreparation() {
   lw_kernel_destroy(editedKernel);
   lw_string_destroy(editedEditor);
 
+  LWModulationControls modulation{};
+  assert(lw_scene_modulation_controls(first, &modulation) == 1);
+  assert(modulation.pitch_enabled == 1U && modulation.pitch_depth == 1.0F);
+  modulation.pitch_depth = 0.5F;
+  modulation.timbre_enabled = 0U;
+  modulation.gain_depth = -0.25F;
+  char* editedModulation = nullptr;
+  assert(lw_scene_apply_modulation_controls(first, &modulation, &editedModulation) == 1);
+  LWModulationControls modulationRoundTrip{};
+  assert(lw_scene_modulation_controls(editedModulation, &modulationRoundTrip) == 1);
+  assert(modulationRoundTrip.pitch_depth == 0.5F);
+  assert(modulationRoundTrip.timbre_enabled == 0U);
+  assert(modulationRoundTrip.gain_depth == -0.25F);
+  lw_string_destroy(editedModulation);
+
   LWRoleControl control{};
   assert(lw_scene_role_control(first, 0, &control) == 1);
   control.density = 0.75F;

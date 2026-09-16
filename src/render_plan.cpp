@@ -88,6 +88,19 @@ bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate, Ren
   output.terrain.velocityResponse = static_cast<float>(articulation.velocityResponse);
   output.terrain.pressureResponse = static_cast<float>(articulation.pressureResponse);
   output.terrain.slideResponse = static_cast<float>(articulation.slideResponse);
+  // An empty graph preserves the direct-play mappings used by Scene v0. Once a
+  // Scene v1 route is present, the graph explicitly owns the three supported
+  // per-note expression destinations.
+  if (!scene.modulation.routes.empty()) {
+    output.terrain.gesturePitchDepth = 0.0F;
+    output.terrain.gestureTimbreDepth = 0.0F;
+    output.terrain.pressureGainDepth = 0.0F;
+    for (const auto& route : scene.modulation.routes) {
+      if (route.source == "gesture-x") output.terrain.gesturePitchDepth = static_cast<float>(route.depth);
+      else if (route.source == "gesture-y") output.terrain.gestureTimbreDepth = static_cast<float>(route.depth);
+      else if (route.source == "pressure") output.terrain.pressureGainDepth = static_cast<float>(route.depth);
+    }
+  }
   return true;
 }
 

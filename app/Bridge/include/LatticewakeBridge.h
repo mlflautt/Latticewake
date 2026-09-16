@@ -60,6 +60,14 @@ typedef struct LWSceneEditorControls {
   double pressure_response;
   double slide_response;
 } LWSceneEditorControls;
+typedef struct LWModulationControls {
+  unsigned int pitch_enabled;
+  float pitch_depth;
+  unsigned int timbre_enabled;
+  float timbre_depth;
+  unsigned int gain_enabled;
+  float gain_depth;
+} LWModulationControls;
 LWKernelRef* lw_kernel_create(void);
 void lw_kernel_destroy(LWKernelRef* kernel);
 int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
@@ -76,6 +84,9 @@ int lw_scene_apply_role_control(const char* json, unsigned int role_index,
 int lw_scene_editor_controls(const char* json, LWSceneEditorControls* controls);
 int lw_scene_apply_editor_controls(const char* json, const LWSceneEditorControls* controls,
                                    char** canonical_json);
+int lw_scene_modulation_controls(const char* json, LWModulationControls* controls);
+int lw_scene_apply_modulation_controls(const char* json, const LWModulationControls* controls,
+                                       char** canonical_json);
 int lw_role_preview_scene_json(const char* json, unsigned long long start_sample,
                                unsigned long long frames, double sample_rate,
                                LWRoleTraceSummary* summary);
