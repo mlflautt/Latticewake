@@ -20,6 +20,10 @@ kill existing app instances, or modify saved scenes.
    UUID receipt under `build/exact-launch/`. It never kills a process. The
    receipt proves process identity only; it does not automate UI interaction or
    establish that a screen observation came from a particular control action.
+   For a native UI review when another Latticewake instance is open, use
+   `make launch-review` instead. It creates a uniquely identified, ad-hoc
+   signed review copy under `build/review/` and records its bundle path and
+   PID. The review copy is disposable build evidence, never a scene library.
 5. Read `build/crash-triage/summary.txt`. A newly produced `.ips` file is copied
    into the bundle for a reproducible handoff.
 6. Classify before changing code: Swift executor isolation, Core MIDI lifecycle,

@@ -8,7 +8,7 @@ CORE_SOURCES = src/scene.cpp src/scene_v1.cpp src/event_trace.cpp src/terrain_ev
 TEST_SOURCES = tests/core_tests.cpp
 BRIDGE_SOURCES = app/Bridge/LatticewakeBridge.cpp tests/bridge_tests.cpp
 
-.PHONY: test clean sanitizer swift-test scripts-check package bundle-verify verify-release crash-baseline crash-smoke crash-report launch-exact
+.PHONY: test clean sanitizer swift-test scripts-check package bundle-verify verify-release crash-baseline crash-smoke crash-report launch-exact launch-review
 
 test: $(TEST_BIN) $(BRIDGE_TEST_BIN) $(BUILD_DIR)/playable_tests
 	$(TEST_BIN)
@@ -28,6 +28,7 @@ scripts-check:
 	zsh -n scripts/triage_macos_crash.sh
 	zsh -n scripts/verify_macos_bundle.sh
 	zsh -n scripts/launch_exact_macos_app.sh
+	zsh -n scripts/launch_review_macos_app.sh
 
 package:
 	bash app/scripts/build_macos_app.sh
@@ -58,6 +59,9 @@ crash-report:
 
 launch-exact:
 	zsh scripts/launch_exact_macos_app.sh
+
+launch-review:
+	zsh scripts/launch_review_macos_app.sh
 
 bundle-verify:
 	zsh scripts/verify_macos_bundle.sh
