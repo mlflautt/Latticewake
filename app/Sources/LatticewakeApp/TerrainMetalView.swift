@@ -106,9 +106,22 @@ struct TerrainContourSurface: View {
   let pointer: CGPoint?
   let heldNotes: [Int]
   let activeLanes: Int
+  let source: TerrainSurfacePresentation
+  let media: TerrainSurfaceMedia?
+
+  init(snapshot: TerrainStageSnapshot, pointer: CGPoint?, heldNotes: [Int], activeLanes: Int,
+       source: TerrainSurfacePresentation = .analyticDefault, media: TerrainSurfaceMedia? = nil) {
+    self.snapshot = snapshot
+    self.pointer = pointer
+    self.heldNotes = heldNotes
+    self.activeLanes = activeLanes
+    self.source = source
+    self.media = media
+  }
 
   var body: some View {
     ZStack {
+      sourcePlane
       // Canvas is the stable baseline while the MTKView path is re-admitted for
       // idle cost on the target OS. It consumes the same immutable snapshot.
       TerrainStageView(snapshot: snapshot)
@@ -128,7 +141,7 @@ struct TerrainContourSurface: View {
         }
         Spacer()
         HStack {
-          Text("SAMPLING PATH").font(.caption2.monospaced()).foregroundStyle(.secondary)
+          StageSourceBadge(presentation: source)
           Spacer()
           Text("\(snapshot.points.count) points").font(.caption2.monospaced()).foregroundStyle(.secondary)
         }
@@ -141,6 +154,34 @@ struct TerrainContourSurface: View {
     .overlay(RoundedRectangle(cornerRadius: 16).stroke(.cyan.opacity(0.22), lineWidth: 1))
     .accessibilityElement(children: .combine)
     .accessibilityLabel("Authoritative terrain surface with \(snapshot.points.count) immutable terrain samples, \(heldNotes.count) direct voices, and \(activeLanes) active lanes")
+  }
+
+  @ViewBuilder private var sourcePlane: some View {
+    if source.primaryLayer.kind == .image, let media,
+       media.assetID == source.primaryLayer.assetID {
+      Image(nsImage: media.image)
+        .resizable().scaledToFill().saturation(0.62).contrast(1.08)
+        .overlay(Color(red: 0.01, green: 0.04, blue: 0.08).opacity(0.42))
+        .clipped()
+    } else if source.primaryLayer.kind == .image {
+      ZStack {
+        LinearGradient(colors: [Color(red: 0.035, green: 0.055, blue: 0.09),
+                                Color(red: 0.012, green: 0.026, blue: 0.052)],
+                       startPoint: .topLeading, endPoint: .bottomTrailing)
+        VStack(spacing: 5) {
+          Image(systemName: "photo.badge.exclamationmark").font(.title2)
+          Text(source.primaryLayer.displayName).font(.caption)
+          Text("Image source is referenced but not resolved on this Mac")
+            .font(.caption2).foregroundStyle(.secondary)
+        }
+      }
+    } else {
+      ZStack {
+        Color(red: 0.015, green: 0.027, blue: 0.060)
+        RadialGradient(colors: [LatticewakeDesign.cyan.opacity(0.08), .clear],
+                       center: .center, startRadius: 10, endRadius: 280)
+      }
+    }
   }
 
   private func drawContours(context: GraphicsContext, size: CGSize) {

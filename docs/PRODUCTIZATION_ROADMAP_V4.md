@@ -270,10 +270,18 @@ while preserving the other two, compare the result, undo it, and save it.
 - Keep flat, noisy, nonperiodic, and invalid traversal diagnostics close to the
   affected control, with a suggested recovery that never substitutes an
   unrelated oscillator.
+- Add image-derived Surface v1 as the first real media workflow: import or drag
+  a fractal/image, choose a deterministic luminance, channel, edge, or gradient
+  interpretation, preview the registered image/contour/path overlay, then
+  explicitly replace layer A or B. Store a project-owned normalized asset plus
+  source hash, provider version, settings, and generated hash; never read the
+  image in the callback.
 
 **Acceptance:** the five-minute task—alter each component, compare A/B, undo,
-and save—requires no Diagnostics knowledge; previews never mutate saved state;
-every publication is prepared outside the callback and traceable.
+and save—requires no Diagnostics knowledge; a supplied fractal image can become
+a visible and audible deterministic Surface while Traversal and Articulation
+remain unchanged; previews never mutate saved state; every publication is
+prepared outside the callback and traceable.
 
 #### Cycle 061 — Performance lanes and musical scene flow
 
@@ -396,7 +404,7 @@ recorded as human decisions rather than inferred from tests.
 
 After Cycle 066, resume the broader North Star in this order:
 
-1. deterministic image- and audio-derived Surfaces;
+1. audio-derived Surfaces and expanded image-analysis providers;
 2. EngineRack plus terrain-excited resonator and prepared buses;
 3. scene chains, semantic performance capture, stems, MIDI/MPE, and exports;
 4. richer Freeze and Grow providers and documented external-agent adapters;

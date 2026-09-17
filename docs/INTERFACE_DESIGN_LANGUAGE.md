@@ -21,6 +21,12 @@ game-like, or faux-scientific.
   chains.
 - Diagnostics remain collapsed unless requested or a fault needs attention.
 
+Cycle 057 implements this as one fixed shell: the top transport and center
+Stage never scroll, the left tool rail opens Library/Grow, the right drawer
+switches among Scene, Motion, and Lanes, and the performance macro/lane rails
+remain beside the Stage. Perform, Sculpt, and Grow are levels of disclosure
+over the same instrument rather than separate pages.
+
 ## Visual grammar
 
 - Foundation: graphite and deep navy surfaces with restrained depth changes.
@@ -44,6 +50,10 @@ game-like, or faux-scientific.
   before Accept or Reject.
 - Double-click resets a parameter; Option-drag provides fine adjustment; all
   destructive or broad mutations are undoable.
+- An image-derived Surface appears as the registered source plane beneath its
+  interpreted contours. Traversal and live samples share the same coordinates;
+  a detached thumbnail never substitutes for the playable terrain. See
+  [Media-derived terrain interface](MEDIA_TERRAIN_INTERFACE.md).
 
 ## Motion and accessibility
 
@@ -61,4 +71,3 @@ Hyperion, Novum, and Myth inform principles such as explicit modulation scope,
 separable sound components, direct manipulation, contextual depth, and bounded
 variation. Latticewake does not copy their layouts, terminology, assets,
 presets, or visual identities.
-

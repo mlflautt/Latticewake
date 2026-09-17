@@ -41,6 +41,10 @@ struct ContentView: View {
   @State private var isDirty = false
   @State private var libraryOpen = false
   @State private var inspectorOpen = false
+  @State private var diagnosticsOpen = false
+  @State private var workspace: StageWorkspace = .perform
+  @State private var inspectorPage: StageInspectorPage = .sculpt
+  @State private var surfacePresentation = TerrainSurfacePresentation.analyticDefault
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   private var roleEditStatus: String {
     if audio.roleChangesPending {
@@ -50,144 +54,228 @@ struct ContentView: View {
     return "Role controls match the active loop."
   }
   var body: some View {
-    VStack {
-      VStack(spacing: 14) {
-      HStack(alignment: .firstTextBaseline) {
-        VStack(alignment: .leading, spacing: 2) {
-          Text("Latticewake").font(.title.bold())
-          Text("TERRAIN STAGE").font(.caption2.monospaced()).foregroundStyle(.cyan)
-        }
-        Spacer()
-        VStack(alignment: .trailing, spacing: 2) {
-          Text(audio.running ? "AUDITION" : "READY").font(.caption.monospaced()).foregroundStyle(audio.running ? .mint : .secondary)
-          Text("OUT \(Int(audio.outputPeak * 100))%").font(.caption2.monospaced()).foregroundStyle(.secondary)
-        }
-        Button("Panic") { input.panic(reason: "artist") }.buttonStyle(.bordered)
-      }
-      HStack {
-        Button("Library") { libraryOpen.toggle() }.buttonStyle(.bordered)
-        Button("Inspect") { inspectorOpen.toggle() }.buttonStyle(.bordered)
-        Menu("Starter Scenes") {
-          Button("Sustained Terrain") { selectStarter(DemoScene.sustainedJSON, label: "Sustained Terrain") }
-          Button("Gesture Terrain") { selectStarter(DemoScene.gestureJSON, label: "Gesture Terrain") }
-          Button("Four Role Loop") { selectStarter(DemoScene.fourRoleJSON, label: "Four Role Loop") }
-        }.disabled(audio.roleChangesPending)
-        Button("New") { selectStarter(DemoScene.gestureJSON, label: "New Gesture Terrain") }.disabled(audio.roleChangesPending)
-        Button("Save As…") { saveAs() }
-        Button("Load…") { load() }.disabled(audio.roleChangesPending)
-        Button("Undo") { undo() }.disabled(!undoHistory.canUndo || audio.roleChangesPending)
-        Button("Capture 8s WAV") { capture() }
-      }
-      Text(sceneURL == nil ? "Unsaved scene\(isDirty ? " • changed" : "")" : "\(sceneURL!.lastPathComponent)\(isDirty ? " • unsaved changes" : "")")
-        .font(.caption).foregroundStyle(.secondary)
-      if previewActive { Text("Preview active — Return restores the current scene.").font(.caption).foregroundStyle(.orange) }
-      if !terrain.snapshot.points.isEmpty,
-         (terrain.snapshot.points.map(\.value).max() ?? 0) - (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001 {
-        Text("This path produces no sustained tone.").foregroundStyle(.orange)
-      }
-      HStack {
-        Text("Play the terrain").font(.headline)
-        Spacer()
-        Text(audio.running ? "Audition running" : "Start to play").foregroundStyle(.secondary)
-      }
-      if !roles.isEmpty {
-        RoleControlsView(controls: $roles, performanceMask: rolePerformanceMask,
-                         editStatus: roleEditStatus, changesPending: audio.roleChangesPending,
-                         rolesRunning: audio.rolesRunning,
-                         toggleMute: toggleRoleMute, toggleSolo: toggleRoleSolo,
-                         apply: applyRoleChanges)
-      }
-      Text(audio.rolesRunning ? "Roles playing • \(audio.activeRoleLanes) active lane\(audio.activeRoleLanes == 1 ? "" : "s")" : "Roles stopped")
-        .font(.caption).foregroundStyle(.secondary)
-      Text("Hold keys for notes. Drag to play C3, or shape held keys. Left/right: pitch • up/down: timbre.").font(.caption)
-      Text("Sampling path").font(.caption)
-      ProgressView("Output", value: audio.outputPeak, total: 1).frame(maxWidth: 300)
-      GeometryReader { geometry in
-        TerrainContourSurface(snapshot: terrain.snapshot, pointer: input.pointerPosition,
-                              heldNotes: input.heldNotes.sorted(), activeLanes: audio.activeRoleLanes)
-          .frame(width: max(1, geometry.size.width), height: 320)
-          .contentShape(Rectangle())
-          .gesture(DragGesture(minimumDistance: 0).onChanged { value in
-            input.gestureChanged(location: value.location, size: geometry.size, pointerNote: performance.pointerNote)
-          }.onEnded { _ in input.endGesture() })
-      }
-      .frame(minHeight: 320, maxHeight: 320)
-      Text("Held notes: \(input.heldNotes.sorted().map(String.init).joined(separator: ", "))\(input.pointerNote.map { " • pointer \($0)" } ?? "")").font(.caption)
-      if !input.voices.isEmpty {
-        HStack(spacing: 6) {
-          ForEach(input.voices) { voice in
-            Text("\(voice.label) • G \(String(format: "%.2f", voice.glide)) • P \(String(format: "%.2f", voice.press)) • S \(String(format: "%.2f", voice.slide))")
-              .font(.caption2.monospaced()).padding(5).background(.white.opacity(0.06), in: Capsule())
-          }
-        }
-      }
-      StageRoleDeck(roles: roles, activeLanes: audio.activeRoleLanes, running: audio.rolesRunning)
-      if libraryOpen || inspectorOpen {
-        HStack(alignment: .top, spacing: 12) {
-          if libraryOpen {
-            StageDrawer(title: "Library", color: .cyan) {
-              Text("Scenes, captures, and lineage stay explicit.").font(.caption).foregroundStyle(.secondary)
-              GrowControlsView(depth: $growDepth, frozen: $frozenComponents,
-                               proposals: growProposals, selectedProposalID: $selectedGrowProposalID,
-                               generate: generateGrow, preview: previewGrow, accept: acceptGrow,
-                               reject: rejectGrow)
-              if let receipt = acceptedGrowReceipts.last { Text("Accepted variations: \(acceptedGrowReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
-              ProposalStudioView(json: $proposalJSON, localIntent: $localProposalIntent, validated: validatedAgentProposal, status: proposalStatus, validate: validateAgentProposal, preview: previewAgentProposal, accept: acceptAgentProposal, reject: rejectAgentProposal, sample: loadProposalFixture, prepareLocal: loadLocalProposal)
-              if let receipt = acceptedAgentReceipts.last { Text("Accepted agent proposals: \(acceptedAgentReceipts.count) • \(receipt.proposalID)").font(.caption2.monospaced()).foregroundStyle(.secondary) }
-              Button("Close Library") { libraryOpen = false }.font(.caption)
-              Text("Current: \(receipt.isEmpty ? "unidentified" : receipt)").font(.caption2.monospaced()).foregroundStyle(.secondary)
+    GeometryReader { window in
+      let allowsTwoDrawers = window.size.width >= 1_180
+      ZStack {
+        LatticewakeDesign.background.ignoresSafeArea()
+        VStack(spacing: 0) {
+          StageTopBar(
+            workspace: $workspace,
+            sceneName: sceneURL?.deletingPathExtension().lastPathComponent ?? "Starter Terrain",
+            isDirty: isDirty,
+            audioRunning: audio.running,
+            rolesRunning: audio.rolesRunning,
+            outputPeak: audio.outputPeak,
+            canUndo: undoHistory.canUndo,
+            sceneChangesBlocked: audio.roleChangesPending,
+            toggleAudio: toggleAudio,
+            toggleRoles: toggleRoles,
+            selectStarter: selectStarterAtIndex,
+            newScene: { selectStarter(DemoScene.gestureJSON, label: "New Gesture Terrain") },
+            saveAs: saveAs,
+            load: load,
+            undo: undo,
+            showDiagnostics: { diagnosticsOpen = true },
+            panic: { input.panic(reason: "artist") }
+          )
+
+          HStack(spacing: 0) {
+            StageToolRail(
+              libraryOpen: libraryOpen,
+              inspectorOpen: inspectorOpen,
+              workspace: workspace,
+              toggleLibrary: {
+                libraryOpen.toggle()
+                if libraryOpen && !allowsTwoDrawers { inspectorOpen = false }
+              },
+              toggleInspector: {
+                inspectorOpen.toggle()
+                if inspectorOpen && !allowsTwoDrawers { libraryOpen = false }
+              },
+              showGrow: {
+                workspace = .grow
+                libraryOpen = true
+                if !allowsTwoDrawers { inspectorOpen = false }
+              },
+              capture: capture
+            )
+
+            if libraryOpen && (!inspectorOpen || allowsTwoDrawers) {
+              StageContextDrawer(title: workspace == .grow ? "Grow" : "Library",
+                                 subtitle: "Scenes, variations, lineage", color: LatticewakeDesign.cyan,
+                                 close: { libraryOpen = false }) {
+                VStack(alignment: .leading, spacing: 12) {
+                  GrowControlsView(depth: $growDepth, frozen: $frozenComponents,
+                                   proposals: growProposals, selectedProposalID: $selectedGrowProposalID,
+                                   generate: generateGrow, preview: previewGrow, accept: acceptGrow,
+                                   reject: rejectGrow)
+                  if let last = acceptedGrowReceipts.last {
+                    Text("Accepted variations: \(acceptedGrowReceipts.count) • \(last.proposalID)")
+                      .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                  }
+                  Divider().opacity(0.45)
+                  ProposalStudioView(json: $proposalJSON, localIntent: $localProposalIntent,
+                                     validated: validatedAgentProposal, status: proposalStatus,
+                                     validate: validateAgentProposal, preview: previewAgentProposal,
+                                     accept: acceptAgentProposal, reject: rejectAgentProposal,
+                                     sample: loadProposalFixture, prepareLocal: loadLocalProposal)
+                  if let last = acceptedAgentReceipts.last {
+                    Text("Accepted agent proposals: \(acceptedAgentReceipts.count) • \(last.proposalID)")
+                      .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                  }
+                  Text("Scene \(receipt.isEmpty ? "unidentified" : receipt)")
+                    .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                }
+              }
+            }
+
+            VStack(spacing: 10) {
+              HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                  Text("TERRAIN STAGE").font(.caption2.monospaced()).foregroundStyle(LatticewakeDesign.cyan)
+                  StageSourceBadge(presentation: surfacePresentation)
+                }
+                Spacer()
+                Text(audio.running ? "PLAYABLE" : "AUDIO OFF")
+                  .font(.caption2.monospaced())
+                  .foregroundStyle(audio.running ? LatticewakeDesign.mint : .secondary)
+              }
+
+              ZStack(alignment: .topLeading) {
+                GeometryReader { stage in
+                  TerrainContourSurface(snapshot: terrain.snapshot, pointer: input.pointerPosition,
+                                        heldNotes: input.heldNotes.sorted(), activeLanes: audio.activeRoleLanes,
+                                        source: surfacePresentation)
+                    .frame(width: max(1, stage.size.width), height: max(1, stage.size.height))
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0).onChanged { value in
+                      input.gestureChanged(location: value.location, size: stage.size,
+                                           pointerNote: performance.pointerNote)
+                    }.onEnded { _ in input.endGesture() })
+                }
+                if previewActive {
+                  Label("Preview — current saved scene is untouched", systemImage: "eye")
+                    .font(.caption).padding(7)
+                    .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 7))
+                    .padding(12)
+                }
+                if terrainIsFlat {
+                  Label("This path produces no sustained tone", systemImage: "exclamationmark.triangle")
+                    .font(.caption).foregroundStyle(LatticewakeDesign.amber).padding(7)
+                    .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 7))
+                    .padding(12).offset(y: previewActive ? 38 : 0)
+                }
+              }
+              .frame(minHeight: 260)
+
+              StageMacroRail(controls: $editorControls, commit: applyEditorChanges)
+                .disabled(audio.roleChangesPending)
+
+              if !input.voices.isEmpty {
+                ScrollView(.horizontal) {
+                  HStack(spacing: 6) {
+                    ForEach(input.voices) { voice in
+                      Text("\(voice.label)  G \(String(format: "%+.2f", voice.glide))  P \(String(format: "%.2f", voice.press))  S \(String(format: "%.2f", voice.slide))")
+                        .font(.caption2.monospaced()).padding(.horizontal, 7).padding(.vertical, 4)
+                        .background(.white.opacity(0.06), in: Capsule())
+                    }
+                  }
+                }
+                .scrollIndicators(.hidden)
+              }
+
+              StageLaneStrip(roles: roles, performanceMask: rolePerformanceMask,
+                             activeLaneCount: audio.activeRoleLanes, running: audio.rolesRunning,
+                             changesPending: audio.roleChangesPending,
+                             selectLane: { _ in
+                               inspectorPage = .lanes; inspectorOpen = true
+                               if !allowsTwoDrawers { libraryOpen = false }
+                             },
+                             toggleMute: toggleRoleMute, toggleSolo: toggleRoleSolo)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            if inspectorOpen {
+              StageContextDrawer(title: "Inspector", subtitle: inspectorPage.rawValue,
+                                 color: LatticewakeDesign.violet,
+                                 close: { inspectorOpen = false }) {
+                VStack(alignment: .leading, spacing: 10) {
+                  Picker("Inspector", selection: $inspectorPage) {
+                    ForEach(StageInspectorPage.allCases) { Text($0.rawValue).tag($0) }
+                  }
+                  .pickerStyle(.segmented)
+                  switch inspectorPage {
+                  case .sculpt:
+                    Text("Surface · Traversal · Articulation").font(.caption).foregroundStyle(.secondary)
+                    SceneEditorView(controls: $editorControls, apply: applyEditorChanges,
+                                    preview: previewEditorChanges, captureA: { previewABytes = sceneBytes },
+                                    previewA: previewA, returnToCurrent: returnToCurrent,
+                                    hasA: previewABytes != nil)
+                  case .modulation:
+                    ModulationControlsView(controls: $modulationControls, apply: applyModulationChanges)
+                  case .lanes:
+                    RoleControlsView(controls: $roles, performanceMask: rolePerformanceMask,
+                                     editStatus: roleEditStatus, changesPending: audio.roleChangesPending,
+                                     rolesRunning: audio.rolesRunning,
+                                     toggleMute: toggleRoleMute, toggleSolo: toggleRoleSolo,
+                                     apply: applyRoleChanges)
+                  }
+                  Text(reduceMotion ? "Reduced motion active" : "Live snapshot display")
+                    .font(.caption2).foregroundStyle(.secondary)
+                }
+              }
             }
           }
-          if inspectorOpen {
-            StageDrawer(title: "Inspector", color: .purple) {
-              Text("Surface · Traversal · Articulation").font(.caption)
-              SceneEditorView(controls: $editorControls, apply: applyEditorChanges,
-                              preview: previewEditorChanges, captureA: { previewABytes = sceneBytes },
-                              previewA: previewA, returnToCurrent: returnToCurrent,
-                              hasA: previewABytes != nil)
-              ModulationControlsView(controls: $modulationControls, apply: applyModulationChanges)
-              Text(reduceMotion ? "Reduced motion active" : "Live snapshot display").font(.caption2).foregroundStyle(.secondary)
-              Button("Close Inspector") { inspectorOpen = false }.font(.caption)
+        }
+
+        if !error.isEmpty {
+          VStack {
+            Spacer()
+            HStack {
+              Image(systemName: "exclamationmark.triangle.fill")
+              Text(error).lineLimit(2)
+              Spacer()
+              Button("Dismiss") { error = "" }.buttonStyle(.plain)
             }
+            .padding(10).background(Color.red.opacity(0.88), in: RoundedRectangle(cornerRadius: 9))
+            .padding(12)
           }
         }
       }
-      DisclosureGroup("Diagnostics") {
-      if !receipt.isEmpty { Text("Scene \(receipt)").font(.caption).foregroundStyle(.secondary) }
-      if roleTrace.eventCount > 0 {
-        Text("Role preview: \(roleTrace.eventCount) events • trace \(roleTrace.receiptText)").font(.caption).foregroundStyle(.secondary)
-        Text(roleTrace.laneSummaryText).font(.caption2).foregroundStyle(.secondary)
-      }
-      Text("256 immutable trace points • sample \(terrain.snapshot.sampleOffset)").font(.caption).foregroundStyle(.secondary)
-      Text("Bounded C++ event bridge; device callback admission remains pending.").font(.caption).foregroundStyle(.secondary)
-      Text(audio.callbackStatus).font(.caption).foregroundStyle(.secondary)
-      Text(input.status).font(.caption).foregroundStyle(.secondary)
-      if input.overflowRecoveries > 0 { Text("Recovered input overloads: \(input.overflowRecoveries)").font(.caption).foregroundStyle(.orange) }
-      }
-      HStack {
-        Button(audio.running ? "Stop" : "Start") { if audio.running { audio.stop() } else { do { try audio.start() } catch { self.error = error.localizedDescription } } }
-        Button(audio.rolesRunning ? "Stop Roles" : "Play Roles") {
-          if !audio.running { do { try audio.start() } catch { self.error = error.localizedDescription; return } }
-          if audio.rolesRunning { audio.stopRoles(); performance.roleTransportEnabled = false }
-          else { audio.startRoles(); performance.roleTransportEnabled = true }
-          isDirty = true
-        }
-      }
-      HStack {
-        Picker("MIDI", selection: Binding(get: { midi.mode }, set: { midi.configure(mode: $0) })) {
-          ForEach(LatticewakeMpeMode.allCases) { Text($0.rawValue).tag($0) }
-        }.labelsHidden().frame(width: 140)
-        Text("\(midi.status) • \(midi.sourceCount) source").font(.caption).foregroundStyle(.secondary)
-      }
-      Text("Play: A W S E D F T G Y H U J K").font(.caption)
-      Text(String(cString: latticewake_core_version())).font(.caption2).foregroundStyle(.secondary)
-      if !error.isEmpty { Text(error).foregroundStyle(.red) }
-      }
-      .frame(maxWidth: 1_040, alignment: .leading)
-      .padding(.horizontal, 16)
-      .padding(.vertical)
     }
-    .frame(minWidth: 620, minHeight: 620)
+    .frame(minWidth: 760, minHeight: 640)
+    .sheet(isPresented: $diagnosticsOpen) {
+      VStack(alignment: .leading, spacing: 10) {
+        HStack {
+          Text("Latticewake Diagnostics").font(.title2.weight(.semibold))
+          Spacer()
+          Button("Done") { diagnosticsOpen = false }.keyboardShortcut(.cancelAction)
+        }
+        Divider()
+        Text("Scene \(receipt.isEmpty ? "unidentified" : receipt)")
+        if roleTrace.eventCount > 0 {
+          Text("Role trace: \(roleTrace.eventCount) events • \(roleTrace.receiptText)")
+          Text(roleTrace.laneSummaryText)
+        }
+        Text("\(terrain.snapshot.points.count) immutable trace points • sample \(terrain.snapshot.sampleOffset)")
+        Text("Bounded C++ event bridge; device callback admission remains pending.")
+        Text(audio.callbackStatus)
+        Text(input.status)
+        if input.overflowRecoveries > 0 { Text("Recovered input overloads: \(input.overflowRecoveries)").foregroundStyle(.orange) }
+        Divider()
+        HStack {
+          Picker("MIDI mode", selection: Binding(get: { midi.mode }, set: { midi.configure(mode: $0) })) {
+            ForEach(LatticewakeMpeMode.allCases) { Text($0.rawValue).tag($0) }
+          }.frame(width: 170)
+          Text("\(midi.status) • \(midi.sourceCount) source")
+        }
+        Text("Keyboard: A W S E D F T G Y H U J K")
+        Text(String(cString: latticewake_core_version())).font(.caption.monospaced()).foregroundStyle(.secondary)
+      }
+      .font(.caption)
+      .padding(20).frame(minWidth: 580, minHeight: 360, alignment: .topLeading)
+    }
     .focusable().task {
       do {
       input.attach(audio: audio)
@@ -210,12 +298,51 @@ struct ContentView: View {
       }
     }.onChange(of: audio.running) { _, running in
       if !running { input.audioStopped() }
+    }.onChange(of: workspace) { _, next in
+      switch next {
+      case .perform: break
+      case .sculpt:
+        inspectorPage = .sculpt
+        inspectorOpen = true
+        libraryOpen = false
+      case .grow:
+        libraryOpen = true
+        inspectorOpen = false
+      }
     }.onChange(of: audio.roleChangesPending) { _, pending in
       guard !pending, let queuedRoles else { return }
       activeRoles = queuedRoles
       self.queuedRoles = nil
       if let pendingRoleTrace { roleTrace = pendingRoleTrace; self.pendingRoleTrace = nil }
     }.onDisappear { input.focusLost(); midi.stop(); audio.stop() }
+  }
+
+  private var terrainIsFlat: Bool {
+    guard !terrain.snapshot.points.isEmpty else { return false }
+    return (terrain.snapshot.points.map(\.value).max() ?? 0) -
+      (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001
+  }
+
+  private func toggleAudio() {
+    if audio.running { audio.stop(); return }
+    do { try audio.start() } catch { self.error = error.localizedDescription }
+  }
+
+  private func toggleRoles() {
+    if !audio.running {
+      do { try audio.start() } catch { self.error = error.localizedDescription; return }
+    }
+    if audio.rolesRunning { audio.stopRoles(); performance.roleTransportEnabled = false }
+    else { audio.startRoles(); performance.roleTransportEnabled = true }
+    isDirty = true
+  }
+
+  private func selectStarterAtIndex(_ index: Int) {
+    switch index {
+    case 0: selectStarter(DemoScene.sustainedJSON, label: "Sustained Terrain")
+    case 2: selectStarter(DemoScene.fourRoleJSON, label: "Four Role Loop")
+    default: selectStarter(DemoScene.gestureJSON, label: "Gesture Terrain")
+    }
   }
 
   private func applyRoleChanges() {
@@ -376,6 +503,7 @@ struct ContentView: View {
   private func previewTemporary(_ bytes: Data, label: String) throws {
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
+    surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
     previewActive = true
     receipt = "\(label) • Return restores current scene"
   }
@@ -384,6 +512,7 @@ struct ContentView: View {
     do {
       try audio.setScene(bytes: sceneBytes)
       try terrain.prepare(sceneBytes: sceneBytes)
+      surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: sceneBytes)
       previewActive = false
       receipt = String(SceneLibrary.receipt(for: sceneBytes).sha256.prefix(12))
     } catch { self.error = error.localizedDescription }
@@ -405,6 +534,7 @@ struct ContentView: View {
     rolePerformanceMask = .init()
     editorControls = try SceneEditorBridge.controls(from: bytes)
     modulationControls = try ModulationBridge.controls(from: bytes)
+    surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
     let installedTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
     if audio.roleChangesPending {
       queuedRoles = installedRoles

@@ -486,4 +486,30 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertTrue(receipt.statusText.contains("48000 Hz"))
   XCTAssertTrue(receipt.fileContents.hasSuffix("\n"))
   }
+
+  func testSurfacePresentationMigratesAnalyticSceneAndDescribesImageLayer() throws {
+    let analytic = try TerrainSurfacePresentation.decode(sceneBytes: Data(DemoScene.gestureJSON.utf8))
+    XCTAssertEqual(analytic.layers.map(\.kind), [.analytic, .analytic])
+    XCTAssertEqual(analytic.morph, 0)
+
+    let canonical = try SceneDocumentBridge.canonicalV1(from: Data(DemoScene.gestureJSON.utf8))
+    var root = try XCTUnwrap(try JSONSerialization.jsonObject(with: canonical) as? [String: Any])
+    var surface = try XCTUnwrap(root["surface"] as? [String: Any])
+    var layers = try XCTUnwrap(surface["layers"] as? [[String: Any]])
+    layers[0]["sourceType"] = "image"
+    layers[0]["assetID"] = "fractal-coast.png"
+    layers[0]["assetHash"] = String(repeating: "a", count: 64)
+    layers[0]["mediaType"] = "image/png"
+    surface["layers"] = layers
+    surface["morph"] = 0.25
+    root["surface"] = surface
+    let imageScene = try JSONSerialization.data(withJSONObject: root, options: [.sortedKeys])
+
+    let presentation = try TerrainSurfacePresentation.decode(sceneBytes: imageScene)
+    XCTAssertEqual(presentation.primaryLayer.kind, .image)
+    XCTAssertEqual(presentation.primaryLayer.displayName, "fractal-coast.png")
+    XCTAssertEqual(presentation.primaryLayer.mediaType, "image/png")
+    XCTAssertEqual(presentation.morph, 0.25)
+    XCTAssertEqual(presentation.sourceSummary, "Image A ↔ Analytic B • 25%")
+  }
 }

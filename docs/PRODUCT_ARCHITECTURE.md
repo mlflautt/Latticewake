@@ -13,6 +13,20 @@ only immutable C++ terrain-frame snapshots; its Canvas contour overlay is visual
 annotation, never audio state. 3D remains an optional secondary view. The Stage
 stays playable while Library and Inspector drawers provide contextual depth.
 
+The Cycle 057 product shell makes Perform, Sculpt, and Grow progressive depths
+over that persistent Stage. A fixed top bar owns standalone audio, role
+transport, scene actions, output, undo, diagnostics, and panic. Six prepared
+scene controls form the first macro rail, while lane cards separate direct
+performance from detailed lane editing. The current Canvas route remains the
+admitted visual baseline; the retained Metal renderer is not described as
+production-authoritative until its target-device cost is admitted.
+
+Image and audio Surface descriptors are now visible to the UI without file
+access from rendering. A future resolved image Surface uses its source image as
+the dimmed coordinate plane, with interpreted contours, traversal, sampling
+point, and voices registered above it. Offline analysis produces project-owned
+assets and prepared tables; the callback never reads media files.
+
 **Scene**, **Generator**, and **Library** are progressive workspaces over the
 same canonical scene model. Scene edits terrain, harmony, roles, paths, and
 transitions. Generator creates bounded previews. Library holds scenes, engine

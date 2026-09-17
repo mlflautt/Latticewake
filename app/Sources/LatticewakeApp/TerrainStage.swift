@@ -63,8 +63,6 @@ struct TerrainStageView: View {
 
   var body: some View {
     Canvas { context, size in
-      let bounds = CGRect(origin: .zero, size: size)
-      context.fill(Path(bounds), with: .color(Color(red: 0.025, green: 0.04, blue: 0.08)))
       drawGrid(context: context, size: size)
       guard snapshot.points.count > 1 else { return }
 
