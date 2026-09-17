@@ -44,6 +44,13 @@ performance masks: they prepare an effective runtime role set without changing
 scene bytes, dirty state, receipts, or save output. Mute wins over Solo, and a
 mask can never enable a lane disabled by the Scene.
 
+Persistent lane edits use a separate double-buffered role-plan handoff. While
+transport runs, the artist can distinguish edited, queued, and active values;
+one complete prepared role plan becomes active at the exact loop wrap. The
+handoff releases notes owned by the preceding role plan, does not replace the
+terrain render plan, and performs no callback allocation. A second role edit is
+rejected while one is pending rather than overwriting an in-flight plan.
+
 ## Real-time boundary
 
 An explicit prepared handoff creates immutable render state before playback.

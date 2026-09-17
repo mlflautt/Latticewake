@@ -43,14 +43,30 @@ struct RenderPlanSlot {
   latticewake::RenderPlan plan;
   std::atomic<std::uint64_t> generation{0};
 };
+struct RolePlanSlot {
+  std::array<latticewake::PreparedRoleEvent, latticewake::RenderPlan::kMaximumRoleEvents> events{};
+  std::uint32_t eventCount{};
+  std::uint64_t loopFrames{};
+  std::atomic<std::uint64_t> generation{0};
+};
+
+void copyRolePlan(const latticewake::RenderPlan& source, RolePlanSlot& destination) noexcept {
+  destination.eventCount=source.roleEventCount;
+  destination.loopFrames=source.roleLoopFrames;
+  std::copy_n(source.roleEvents.begin(),source.roleEventCount,destination.events.begin());
+}
 }
 
 struct LWKernelRef {
   std::array<RenderPlanSlot, 2> plans{};
+  std::array<RolePlanSlot, 2> rolePlans{};
   latticewake::RealtimeEventQueue events;
   alignas(64) std::atomic<std::uint32_t> activePlan{0};
   alignas(64) std::atomic<std::uint32_t> pendingPlan{kNoPlan};
   std::atomic<std::uint64_t> nextGeneration{1};
+  alignas(64) std::atomic<std::uint32_t> activeRolePlan{0};
+  alignas(64) std::atomic<std::uint32_t> pendingRolePlan{kNoPlan};
+  std::atomic<std::uint64_t> nextRoleGeneration{1};
   std::atomic<bool> renderBegun{false};
   alignas(64) std::atomic<bool> panicRequested{false};
   alignas(64) std::atomic<std::uint64_t> callbackCount{0};
@@ -63,8 +79,8 @@ struct LWKernelRef {
   std::atomic<bool> roleStartRequested{false};
   std::atomic<bool> roleStopRequested{false};
   std::atomic<std::uint32_t> activeRoleLanes{0};
-  std::uint64_t roleSampleOffset{};
-  std::uint32_t rolePlanIndex{};
+  std::atomic<std::uint64_t> roleSampleOffset{0};
+  bool roleBoundaryReleaseRequested{};
   std::array<int, 4> activeRoleNotes{{-1,-1,-1,-1}};
   double callbackSampleRate{0.0};
 };
@@ -91,14 +107,18 @@ static int prepareInitial(LWKernelRef* kernel,const latticewake::Scene& scene,co
   latticewake::RenderPlanBuilder builder;
   if(!kernel||kernel->renderBegun.load(std::memory_order_acquire)||!builder.build(scene,rate,kernel->plans[0].plan,error)||!kernel->plans[0].kernel.activate(kernel->plans[0].plan.terrain))return 0;
   kernel->plans[0].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  copyRolePlan(kernel->plans[0].plan,kernel->rolePlans[0]);
+  kernel->rolePlans[0].generation.store(kernel->nextRoleGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->activePlan.store(0,std::memory_order_release);
   kernel->pendingPlan.store(kNoPlan,std::memory_order_release);
+  kernel->activeRolePlan.store(0,std::memory_order_release);
+  kernel->pendingRolePlan.store(kNoPlan,std::memory_order_release);
   kernel->callbackSampleRate=rate;
   kernel->rolesRunning.store(false,std::memory_order_release);
   kernel->roleStartRequested.store(false,std::memory_order_release);
   kernel->roleStopRequested.store(false,std::memory_order_release);
   kernel->activeRoleLanes.store(0,std::memory_order_release);
-  kernel->roleSampleOffset=0; kernel->rolePlanIndex=0; kernel->activeRoleNotes={{-1,-1,-1,-1}};
+  kernel->roleSampleOffset=0; kernel->roleBoundaryReleaseRequested=false; kernel->activeRoleNotes={{-1,-1,-1,-1}};
   return 1;
 }
 
@@ -119,41 +139,67 @@ static int prepareInitialDocument(LWKernelRef* kernel, const char* json, const d
      !buildSceneDocumentPlan(json,rate,kernel->plans[0].plan)||
      !kernel->plans[0].kernel.activate(kernel->plans[0].plan.terrain)) return 0;
   kernel->plans[0].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  copyRolePlan(kernel->plans[0].plan,kernel->rolePlans[0]);
+  kernel->rolePlans[0].generation.store(kernel->nextRoleGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->activePlan.store(0,std::memory_order_release);
   kernel->pendingPlan.store(kNoPlan,std::memory_order_release);
+  kernel->activeRolePlan.store(0,std::memory_order_release);
+  kernel->pendingRolePlan.store(kNoPlan,std::memory_order_release);
   kernel->callbackSampleRate=rate;
   kernel->rolesRunning.store(false,std::memory_order_release);
   kernel->roleStartRequested.store(false,std::memory_order_release);
   kernel->roleStopRequested.store(false,std::memory_order_release);
   kernel->activeRoleLanes.store(0,std::memory_order_release);
-  kernel->roleSampleOffset=0; kernel->rolePlanIndex=0; kernel->activeRoleNotes={{-1,-1,-1,-1}};
+  kernel->roleSampleOffset=0; kernel->roleBoundaryReleaseRequested=false; kernel->activeRoleNotes={{-1,-1,-1,-1}};
   return 1;
 }
 static int publishPlan(LWKernelRef* kernel,const latticewake::Scene& scene,const double rate) {
-  if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
+  if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan||kernel->pendingRolePlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
   const std::uint32_t active=kernel->activePlan.load(std::memory_order_acquire);
   const std::uint32_t candidate=1U-active;
   latticewake::RenderPlanError error;
   latticewake::RenderPlanBuilder builder;
   if(!builder.build(scene,rate,kernel->plans[candidate].plan,error)||!kernel->plans[candidate].kernel.activate(kernel->plans[candidate].plan.terrain))return 0;
   kernel->plans[candidate].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  const std::uint32_t activeRole=kernel->activeRolePlan.load(std::memory_order_acquire);
+  const std::uint32_t candidateRole=1U-activeRole;
+  copyRolePlan(kernel->plans[candidate].plan,kernel->rolePlans[candidateRole]);
+  kernel->rolePlans[candidateRole].generation.store(kernel->nextRoleGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->pendingPlan.store(candidate,std::memory_order_release);
+  kernel->pendingRolePlan.store(candidateRole,std::memory_order_release);
   return 1;
 }
 static int publishDocumentPlan(LWKernelRef* kernel,const char* json,const double rate) {
-  if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
+  if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan||kernel->pendingRolePlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
   const std::uint32_t active=kernel->activePlan.load(std::memory_order_acquire);
   const std::uint32_t candidate=1U-active;
   if(!buildSceneDocumentPlan(json,rate,kernel->plans[candidate].plan)||
      !kernel->plans[candidate].kernel.activate(kernel->plans[candidate].plan.terrain)) return 0;
   kernel->plans[candidate].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  const std::uint32_t activeRole=kernel->activeRolePlan.load(std::memory_order_acquire);
+  const std::uint32_t candidateRole=1U-activeRole;
+  copyRolePlan(kernel->plans[candidate].plan,kernel->rolePlans[candidateRole]);
+  kernel->rolePlans[candidateRole].generation.store(kernel->nextRoleGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   kernel->pendingPlan.store(candidate,std::memory_order_release);
+  kernel->pendingRolePlan.store(candidateRole,std::memory_order_release);
+  return 1;
+}
+static int publishRoleDocumentPlan(LWKernelRef* kernel,const char* json,const double rate) {
+  if(!kernel||kernel->pendingRolePlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
+  latticewake::RenderPlan candidatePlan;
+  if(!buildSceneDocumentPlan(json,rate,candidatePlan))return 0;
+  const std::uint32_t active=kernel->activeRolePlan.load(std::memory_order_acquire);
+  const std::uint32_t candidate=1U-active;
+  copyRolePlan(candidatePlan,kernel->rolePlans[candidate]);
+  kernel->rolePlans[candidate].generation.store(kernel->nextRoleGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
+  kernel->pendingRolePlan.store(candidate,std::memory_order_release);
   return 1;
 }
 int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return prepareInitial(kernel,demoScene(),rate); }
 int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { return prepareInitialDocument(kernel,json,rate); }
 int lw_kernel_publish_demo(LWKernelRef* kernel,double rate) { return publishPlan(kernel,demoScene(),rate); }
 int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { return publishDocumentPlan(kernel,json,rate); }
+int lw_kernel_publish_role_scene_json(LWKernelRef* kernel,const char* json,double rate) { return publishRoleDocumentPlan(kernel,json,rate); }
 int lw_terrain_frame_scene_json(const char* json,const unsigned long long sampleOffset,const double startPhase,const double phaseStep,LWTerrainFramePoint* points,const unsigned int capacity,unsigned int* pointCount) {
   if(!json||!points||!pointCount||capacity==0)return 0;
   latticewake::SceneSerializationError parseError;
@@ -384,8 +430,13 @@ void lw_kernel_set_roles_running(LWKernelRef* k,unsigned int running) {
 }
 int lw_kernel_role_status(const LWKernelRef* k,LWRoleStatus* status) {
   if(!k||!status) return 0;
-  const auto active=k->activePlan.load(std::memory_order_acquire);
-  *status={k->rolesRunning.load(std::memory_order_acquire)?1U:0U,k->activeRoleLanes.load(std::memory_order_acquire),k->plans[active].plan.roleLoopFrames};
+  const auto active=k->activeRolePlan.load(std::memory_order_acquire);
+  const auto pending=k->pendingRolePlan.load(std::memory_order_acquire);
+  *status={k->rolesRunning.load(std::memory_order_acquire)?1U:0U,
+           k->activeRoleLanes.load(std::memory_order_acquire),pending==kNoPlan?0U:1U,
+           k->rolePlans[active].loopFrames,k->roleSampleOffset.load(std::memory_order_acquire),
+           k->rolePlans[active].generation.load(std::memory_order_acquire),
+           pending==kNoPlan?0U:k->rolePlans[pending].generation.load(std::memory_order_acquire)};
   return 1;
 }
 int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
@@ -402,6 +453,7 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
     k->roleStopRequested.store(false,std::memory_order_release);
     k->activeRoleNotes={{-1,-1,-1,-1}};
     k->activeRoleLanes.store(0,std::memory_order_release);
+    k->roleBoundaryReleaseRequested=false;
   }
   const std::uint32_t pending=k->pendingPlan.load(std::memory_order_acquire);
   if(pending!=kNoPlan) {
@@ -416,34 +468,80 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
     const auto lane=scheduled.source-kRoleSourceBase;
     if(lane<k->activeRoleNotes.size()) k->activeRoleNotes[lane]=scheduled.noteOn?scheduled.note:-1;
   };
-  if(k->roleStopRequested.exchange(false,std::memory_order_acq_rel)) {
-    for(std::size_t lane=0;lane<k->activeRoleNotes.size()&&count<events.size();++lane) {
+  auto releaseRoles=[&](const unsigned int frame) {
+    bool releasedAll=true;
+    for(std::size_t lane=0;lane<k->activeRoleNotes.size();++lane) {
       const int note=k->activeRoleNotes[lane];
-      if(note>=0) { events[count++]={0,false,note,0,0,0,0,false,kRoleSourceBase+static_cast<std::uint32_t>(lane)}; k->activeRoleNotes[lane]=-1; }
+      if(note<0) continue;
+      if(count>=events.size()) { releasedAll=false; continue; }
+      events[count++]={frame,false,note,0,0,0,0,false,kRoleSourceBase+static_cast<std::uint32_t>(lane)};
+      k->activeRoleNotes[lane]=-1;
     }
+    return releasedAll;
+  };
+  if(k->roleBoundaryReleaseRequested) {
+    k->roleBoundaryReleaseRequested=!releaseRoles(0);
+  }
+  if(k->roleStopRequested.exchange(false,std::memory_order_acq_rel)) {
+    if(!releaseRoles(0)) k->roleBoundaryReleaseRequested=true;
     k->activeRoleLanes.store(0,std::memory_order_release);
   }
+  const bool roleStart=k->roleStartRequested.exchange(false,std::memory_order_acq_rel);
+  if(!k->rolesRunning.load(std::memory_order_acquire)||roleStart) {
+    const std::uint32_t pendingRole=k->pendingRolePlan.exchange(kNoPlan,std::memory_order_acq_rel);
+    if(pendingRole!=kNoPlan) k->activeRolePlan.store(pendingRole,std::memory_order_release);
+    if(roleStart) k->roleSampleOffset=0;
+  }
   if(k->rolesRunning.load(std::memory_order_acquire)) {
-    const std::uint32_t currentActive=k->activePlan.load(std::memory_order_acquire);
-    if(k->roleStartRequested.exchange(false,std::memory_order_acq_rel)) { k->roleSampleOffset=0; k->rolePlanIndex=currentActive; }
-    auto& rolePlan=k->plans[k->rolePlanIndex].plan;
-    if(rolePlan.roleLoopFrames>0) {
-      const std::uint64_t begin=k->roleSampleOffset;
+    std::uint32_t currentRole=k->activeRolePlan.load(std::memory_order_acquire);
+    auto* rolePlan=&k->rolePlans[currentRole];
+    if(rolePlan->loopFrames>0) {
+      const std::uint64_t begin=k->roleSampleOffset.load(std::memory_order_relaxed);
       const std::uint64_t end=begin+frames;
-      const bool wraps=end>=rolePlan.roleLoopFrames;
-      for(std::uint32_t index=0;index<rolePlan.roleEventCount&&count<events.size();++index) {
-        const auto& scheduled=rolePlan.roleEvents[index];
-        if((!wraps&&scheduled.frame>=begin&&scheduled.frame<end) || (wraps&&(scheduled.frame>=begin||scheduled.frame<(end%rolePlan.roleLoopFrames)))) {
-          const auto relative=scheduled.frame>=begin?scheduled.frame-begin:rolePlan.roleLoopFrames-begin+scheduled.frame;
-          pushRole(scheduled,static_cast<unsigned int>(relative));
+      const bool reachesBoundary=end>=rolePlan->loopFrames;
+      if(!reachesBoundary) {
+        for(std::uint32_t index=0;index<rolePlan->eventCount&&count<events.size();++index) {
+          const auto& scheduled=rolePlan->events[index];
+          if(scheduled.frame>=begin&&scheduled.frame<end) pushRole(scheduled,static_cast<unsigned int>(scheduled.frame-begin));
+        }
+        k->roleSampleOffset=end;
+      } else {
+        const std::uint64_t boundaryFrame=rolePlan->loopFrames-begin;
+        for(std::uint32_t index=0;index<rolePlan->eventCount&&count<events.size();++index) {
+          const auto& scheduled=rolePlan->events[index];
+          if(scheduled.frame>=begin) pushRole(scheduled,static_cast<unsigned int>(scheduled.frame-begin));
+        }
+        const std::uint32_t pendingRole=k->pendingRolePlan.exchange(kNoPlan,std::memory_order_acq_rel);
+        if(pendingRole!=kNoPlan) {
+          if(boundaryFrame<frames) k->roleBoundaryReleaseRequested=!releaseRoles(static_cast<unsigned int>(boundaryFrame));
+          else k->roleBoundaryReleaseRequested=true;
+          k->activeRolePlan.store(pendingRole,std::memory_order_release);
+          currentRole=pendingRole;
+          rolePlan=&k->rolePlans[currentRole];
+        }
+        const std::uint64_t remaining=frames-boundaryFrame;
+        if(remaining>0&&rolePlan->loopFrames>0) {
+          for(std::uint32_t index=0;index<rolePlan->eventCount&&count<events.size();++index) {
+            const auto& scheduled=rolePlan->events[index];
+            if(scheduled.frame<remaining) pushRole(scheduled,static_cast<unsigned int>(boundaryFrame+scheduled.frame));
+          }
+          k->roleSampleOffset=remaining%rolePlan->loopFrames;
+        } else {
+          k->roleSampleOffset=0;
         }
       }
-      k->roleSampleOffset=end%rolePlan.roleLoopFrames;
-      if(wraps) k->rolePlanIndex=currentActive;
     }
   }
   latticewake::KernelEvent event;
-  while(count<events.size()&&k->events.tryPop(event)) events[count++]=event;
+  while(count<events.size()&&k->events.tryPop(event)) {
+    std::size_t insertion=count;
+    while(insertion>0&&events[insertion-1].frame>event.frame) {
+      events[insertion]=events[insertion-1];
+      --insertion;
+    }
+    events[insertion]=event;
+    ++count;
+  }
   const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);
   const bool rendered=k->plans[active].kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count));
   float peak=0;
@@ -490,6 +588,8 @@ void lw_kernel_reset(LWKernelRef* k) {
   k->roleStopRequested.store(false,std::memory_order_release);
   k->activeRoleNotes={{-1,-1,-1,-1}};
   k->activeRoleLanes.store(0,std::memory_order_release);
+  k->roleSampleOffset=0;
+  k->roleBoundaryReleaseRequested=false;
 }
 LWMpeStateRef* lw_mpe_state_create(const unsigned int mode,const int masterChannel,const int memberCount) {
   if(mode>2U||masterChannel<1||masterChannel>16||memberCount<1||memberCount>15)return nullptr;

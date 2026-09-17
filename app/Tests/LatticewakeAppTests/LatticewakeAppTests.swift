@@ -71,6 +71,30 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(audio.auditionReceipt?.rejectedBlocks, 0)
   print(audio.auditionReceipt?.machineLine ?? "missing receipt")
 }
+
+  @MainActor func testOptInDeviceRoleBoundaryHandoff() async throws {
+  guard ProcessInfo.processInfo.environment["LW_DEVICE_SMOKE"] == "1" else { return }
+  let audio = LatticewakeAudio()
+  let scene = Data(DemoScene.fourRoleJSON.utf8)
+  try audio.setScene(bytes: scene)
+  try audio.start()
+  defer { audio.stop() }
+  audio.startRoles()
+  try await Task.sleep(for: .milliseconds(100))
+  audio.refreshMeter()
+  let initialGeneration = audio.activeRolePlanGeneration
+  var controls = try RoleSceneBridge.controls(from: scene)
+  controls[2].variation = 0.75
+  try audio.queueRoleSceneAtLoop(bytes: RoleSceneBridge.apply(controls, to: scene))
+  XCTAssertTrue(audio.roleChangesPending)
+  for _ in 0..<120 where audio.roleChangesPending {
+    try await Task.sleep(for: .milliseconds(50))
+    audio.refreshMeter()
+  }
+  XCTAssertFalse(audio.roleChangesPending)
+  XCTAssertGreaterThan(audio.activeRolePlanGeneration, initialGeneration)
+  XCTAssertLessThan(audio.roleLoopProgress, 0.1)
+}
   @MainActor func testTerrainStagePreparesImmutableSnapshot() throws {
   let model = TerrainStageModel()
   try model.prepare(sceneBytes: Data(DemoScene.canonicalJSON.utf8), sampleOffset: 480)

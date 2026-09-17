@@ -17,8 +17,11 @@ struct ContentView: View {
   @State private var sceneBytes = Data()
   @State private var sceneURL: URL?
   @State private var roles: [RoleControl] = []
+  @State private var activeRoles: [RoleControl] = []
+  @State private var queuedRoles: [RoleControl]?
   @State private var rolePerformanceMask = RolePerformanceMask()
   @State private var roleTrace = RoleTraceSummary.empty
+  @State private var pendingRoleTrace: RoleTraceSummary?
   @State private var performance = PerformanceSettingsV1()
   @State private var editorControls = SceneEditorControls()
   @State private var modulationControls = ModulationControls()
@@ -39,6 +42,13 @@ struct ContentView: View {
   @State private var libraryOpen = false
   @State private var inspectorOpen = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
+  private var roleEditStatus: String {
+    if audio.roleChangesPending {
+      return "Queued for next loop • \(Int(audio.roleLoopProgress * 100))% through active loop"
+    }
+    if roles != activeRoles { return "Edited values are not active yet." }
+    return "Role controls match the active loop."
+  }
   var body: some View {
     VStack {
       VStack(spacing: 14) {
@@ -61,11 +71,11 @@ struct ContentView: View {
           Button("Sustained Terrain") { selectStarter(DemoScene.sustainedJSON, label: "Sustained Terrain") }
           Button("Gesture Terrain") { selectStarter(DemoScene.gestureJSON, label: "Gesture Terrain") }
           Button("Four Role Loop") { selectStarter(DemoScene.fourRoleJSON, label: "Four Role Loop") }
-        }
-        Button("New") { selectStarter(DemoScene.gestureJSON, label: "New Gesture Terrain") }
+        }.disabled(audio.roleChangesPending)
+        Button("New") { selectStarter(DemoScene.gestureJSON, label: "New Gesture Terrain") }.disabled(audio.roleChangesPending)
         Button("Save As…") { saveAs() }
-        Button("Load…") { load() }
-        Button("Undo") { undo() }.disabled(!undoHistory.canUndo)
+        Button("Load…") { load() }.disabled(audio.roleChangesPending)
+        Button("Undo") { undo() }.disabled(!undoHistory.canUndo || audio.roleChangesPending)
         Button("Capture 8s WAV") { capture() }
       }
       Text(sceneURL == nil ? "Unsaved scene\(isDirty ? " • changed" : "")" : "\(sceneURL!.lastPathComponent)\(isDirty ? " • unsaved changes" : "")")
@@ -82,6 +92,8 @@ struct ContentView: View {
       }
       if !roles.isEmpty {
         RoleControlsView(controls: $roles, performanceMask: rolePerformanceMask,
+                         editStatus: roleEditStatus, changesPending: audio.roleChangesPending,
+                         rolesRunning: audio.rolesRunning,
                          toggleMute: toggleRoleMute, toggleSolo: toggleRoleSolo,
                          apply: applyRoleChanges)
       }
@@ -198,13 +210,35 @@ struct ContentView: View {
       }
     }.onChange(of: audio.running) { _, running in
       if !running { input.audioStopped() }
+    }.onChange(of: audio.roleChangesPending) { _, pending in
+      guard !pending, let queuedRoles else { return }
+      activeRoles = queuedRoles
+      self.queuedRoles = nil
+      if let pendingRoleTrace { roleTrace = pendingRoleTrace; self.pendingRoleTrace = nil }
     }.onDisappear { input.focusLost(); midi.stop(); audio.stop() }
   }
 
   private func applyRoleChanges() {
     do {
       let updated = try RoleSceneBridge.apply(roles, to: sceneBytes)
-      try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
+      if audio.running && audio.rolesRunning {
+        let effectiveRoles = rolePerformanceMask.applying(to: roles)
+        let runtimeBytes = try RoleSceneBridge.apply(effectiveRoles, to: updated)
+        try audio.queueRoleSceneAtLoop(bytes: runtimeBytes)
+        if !sceneBytes.isEmpty {
+          undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts,
+                             acceptedAgentReceipts: acceptedAgentReceipts)
+        }
+        queuedRoles = roles
+        pendingRoleTrace = try RoleTraceBridge.preview(sceneBytes: runtimeBytes)
+        sceneBytes = updated
+        receipt = String(SceneLibrary.receipt(for: updated).sha256.prefix(12))
+        isDirty = true
+        previewActive = false
+        error = ""
+      } else {
+        try installScene(updated, url: sceneURL, recordUndo: true, dirty: true)
+      }
       error = ""
     } catch { self.error = error.localizedDescription }
   }
@@ -366,11 +400,21 @@ struct ContentView: View {
     if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts) }
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
-    roles = try RoleSceneBridge.controls(from: bytes)
+    let installedRoles = try RoleSceneBridge.controls(from: bytes)
+    roles = installedRoles
     rolePerformanceMask = .init()
     editorControls = try SceneEditorBridge.controls(from: bytes)
     modulationControls = try ModulationBridge.controls(from: bytes)
-    roleTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
+    let installedTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
+    if audio.roleChangesPending {
+      queuedRoles = installedRoles
+      pendingRoleTrace = installedTrace
+    } else {
+      activeRoles = installedRoles
+      queuedRoles = nil
+      roleTrace = installedTrace
+      pendingRoleTrace = nil
+    }
     sceneBytes = bytes
     sceneURL = url
     receipt = String(SceneLibrary.receipt(for: bytes).sha256.prefix(12))

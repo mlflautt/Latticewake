@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <new>
+#include <string>
 #include <string_view>
 
 namespace {
@@ -295,6 +296,55 @@ void testPreparedRoleTransportAndSourceOwnership() {
   lw_kernel_destroy(kernel);
 }
 
+void testRolePlanPublishesExactlyAtLoopBoundary() {
+  LWKernelRef* const kernel = lw_kernel_create();
+  assert(kernel != nullptr);
+  assert(lw_kernel_prepare_scene_json(kernel, kCanonicalScene, 8000.0) == 1);
+  lw_kernel_set_roles_running(kernel, 1);
+
+  std::array<float, 4096> output{};
+  assert(lw_kernel_render(kernel, output.data(), 256U) == 1);
+  LWRoleStatus before{};
+  assert(lw_kernel_role_status(kernel, &before) == 1);
+  assert(before.running == 1U && before.loop_frames == 32000U && before.sample_offset == 256U);
+  assert(before.active_plan_generation == 1U && before.pending_plan_generation == 0U);
+
+  std::string disabled(kCanonicalScene);
+  const std::string enabledToken="\"enabled\":true";
+  const std::string disabledToken="\"enabled\":false";
+  std::size_t position=0;
+  while((position=disabled.find(enabledToken,position))!=std::string::npos) {
+    disabled.replace(position,enabledToken.size(),disabledToken);
+    position+=disabledToken.size();
+  }
+  assert(lw_kernel_publish_role_scene_json(kernel, disabled.c_str(), 8000.0) == 1);
+  assert(lw_kernel_publish_role_scene_json(kernel, disabled.c_str(), 8000.0) == 0);
+  LWRoleStatus queued{};
+  assert(lw_kernel_role_status(kernel, &queued) == 1);
+  assert(queued.pending_changes == 1U && queued.active_plan_generation == 1U && queued.pending_plan_generation == 2U);
+
+  allocations.store(0, std::memory_order_relaxed);
+  countAllocations.store(true, std::memory_order_relaxed);
+  for(unsigned int block=0;block<7U;++block) assert(lw_kernel_render(kernel,output.data(),4096U)==1);
+  assert(lw_kernel_render(kernel,output.data(),3072U)==1);
+  countAllocations.store(false, std::memory_order_relaxed);
+  assert(allocations.load(std::memory_order_relaxed) == 0U);
+
+  LWRoleStatus adopted{};
+  assert(lw_kernel_role_status(kernel, &adopted) == 1);
+  assert(adopted.pending_changes == 0U && adopted.sample_offset == 0U);
+  assert(adopted.active_plan_generation == 2U && adopted.pending_plan_generation == 0U);
+  LWKernelStatus audioPlan{};
+  assert(lw_kernel_status(kernel, &audioPlan) == 1);
+  assert(audioPlan.active_plan_generation == 1U && audioPlan.pending_plan_generation == 0U);
+
+  assert(lw_kernel_render(kernel,output.data(),256U)==1);
+  LWRoleStatus silentRoles{};
+  assert(lw_kernel_role_status(kernel,&silentRoles)==1);
+  assert(silentRoles.active_lanes==0U);
+  lw_kernel_destroy(kernel);
+}
+
 void testCallbackRouteStressAndBounds() {
   assert(lw_kernel_maximum_callback_frames() == 4096U);
   std::array<float, 4096> output{};
@@ -362,6 +412,7 @@ int main() {
   testRoleControlCanonicalBoundary();
   testRolePreviewBoundary();
   testPreparedRoleTransportAndSourceOwnership();
+  testRolePlanPublishesExactlyAtLoopBoundary();
   testCallbackRouteStressAndBounds();
   return 0;
 }

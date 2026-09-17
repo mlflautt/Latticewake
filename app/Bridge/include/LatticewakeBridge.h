@@ -12,7 +12,15 @@ typedef struct LWKernelStatus {
   unsigned long long active_plan_generation;
   unsigned long long pending_plan_generation;
 } LWKernelStatus;
-typedef struct LWRoleStatus { unsigned int running; unsigned int active_lanes; unsigned long long loop_frames; } LWRoleStatus;
+typedef struct LWRoleStatus {
+  unsigned int running;
+  unsigned int active_lanes;
+  unsigned int pending_changes;
+  unsigned long long loop_frames;
+  unsigned long long sample_offset;
+  unsigned long long active_plan_generation;
+  unsigned long long pending_plan_generation;
+} LWRoleStatus;
 typedef struct LWCallbackStatus {
   unsigned long long callback_count;
   unsigned long long rendered_frames;
@@ -75,6 +83,7 @@ int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
 int lw_kernel_prepare_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
 int lw_kernel_publish_demo(LWKernelRef* kernel, double sample_rate);
 int lw_kernel_publish_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
+int lw_kernel_publish_role_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
 int lw_terrain_frame_scene_json(const char* json, unsigned long long sample_offset,
                                 double start_phase, double phase_step,
                                 LWTerrainFramePoint* points, unsigned int capacity,

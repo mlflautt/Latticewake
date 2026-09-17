@@ -100,6 +100,9 @@ enum RoleSceneBridge {
 struct RoleControlsView: View {
   @Binding var controls: [RoleControl]
   let performanceMask: RolePerformanceMask
+  let editStatus: String
+  let changesPending: Bool
+  let rolesRunning: Bool
   let toggleMute: (Int) -> Void
   let toggleSolo: (Int) -> Void
   let apply: () -> Void
@@ -113,9 +116,11 @@ struct RoleControlsView: View {
             Button("M") { toggleMute(control.id) }
               .buttonStyle(.borderedProminent).tint(performanceMask.muted.contains(control.id) ? .orange : .gray)
               .help("Temporarily mute \(RoleControl.names[control.id]) without changing the scene")
+              .disabled(changesPending)
             Button("S") { toggleSolo(control.id) }
               .buttonStyle(.borderedProminent).tint(performanceMask.soloed.contains(control.id) ? .mint : .gray)
               .help("Temporarily solo \(RoleControl.names[control.id]) without changing the scene")
+              .disabled(changesPending)
             Spacer()
             Picker("Pattern", selection: $control.pattern) {
               let patterns = RoleControl.patterns(for: control.id)
@@ -138,7 +143,9 @@ struct RoleControlsView: View {
         Text("Performance mask active — scene enable states are unchanged.")
           .font(.caption2).foregroundStyle(.orange)
       }
-      Button("Apply Role Changes", action: apply).buttonStyle(.borderedProminent)
+      Text(editStatus).font(.caption2).foregroundStyle(changesPending ? .orange : .secondary)
+      Button(rolesRunning ? "Queue at Loop Boundary" : "Apply Role Changes", action: apply)
+        .buttonStyle(.borderedProminent).disabled(changesPending)
     }.frame(maxWidth: .infinity, alignment: .leading)
   }
 }

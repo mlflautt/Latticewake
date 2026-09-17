@@ -7,6 +7,7 @@ import LatticewakeBridge
 @_silgen_name("lw_kernel_prepare_demo") private func lw_kernel_prepare_demo(_ kernel: OpaquePointer, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_prepare_scene_json") private func lw_kernel_prepare_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_publish_scene_json") private func lw_kernel_publish_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
+@_silgen_name("lw_kernel_publish_role_scene_json") private func lw_kernel_publish_role_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_note_on") private func lw_kernel_note_on(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float) -> Int32
 @_silgen_name("lw_kernel_note_on_source") private func lw_kernel_note_on_source(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float, _ source: UInt32) -> Int32
 @_silgen_name("lw_kernel_expression") private func lw_kernel_expression(_ kernel: OpaquePointer, _ glide: Float, _ press: Float, _ slide: Float) -> Int32
@@ -30,7 +31,11 @@ private struct BridgeCallbackStatus {
 private struct BridgeRoleStatus {
   var running: UInt32 = 0
   var activeLanes: UInt32 = 0
+  var pendingChanges: UInt32 = 0
   var loopFrames: UInt64 = 0
+  var sampleOffset: UInt64 = 0
+  var activePlanGeneration: UInt64 = 0
+  var pendingPlanGeneration: UInt64 = 0
 }
 
 @_silgen_name("lw_kernel_role_status") private func lw_kernel_role_status(
@@ -88,6 +93,9 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   @Published private(set) var outputPeak: Double = 0
   @Published private(set) var rolesRunning = false
   @Published private(set) var activeRoleLanes = 0
+  @Published private(set) var roleChangesPending = false
+  @Published private(set) var roleLoopProgress = 0.0
+  @Published private(set) var activeRolePlanGeneration: UInt64 = 0
   func refreshMeter() {
     guard let kernel else { return }
     let peak = Double(lw_kernel_output_peak(kernel))
@@ -99,6 +107,11 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
         let nextActiveLanes = Int(status.activeLanes)
         if rolesRunning != nextRolesRunning { rolesRunning = nextRolesRunning }
         if activeRoleLanes != nextActiveLanes { activeRoleLanes = nextActiveLanes }
+        let nextPending = status.pendingChanges != 0
+        if roleChangesPending != nextPending { roleChangesPending = nextPending }
+        let nextProgress = status.loopFrames == 0 ? 0 : Double(status.sampleOffset) / Double(status.loopFrames)
+        if abs(roleLoopProgress - nextProgress) > 0.0001 { roleLoopProgress = nextProgress }
+        if activeRolePlanGeneration != status.activePlanGeneration { activeRolePlanGeneration = status.activePlanGeneration }
       }
     }
   }
@@ -116,8 +129,20 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
       guard text.withCString({ lw_kernel_publish_scene_json(kernel, $0, sampleRate) }) != 0 else {
         throw NSError(domain: "Latticewake", code: 4, userInfo: [NSLocalizedDescriptionKey: "Scene change is pending or could not be prepared"])
       }
+      roleChangesPending = true
     }
     sceneJSON = text
+  }
+
+  func queueRoleSceneAtLoop(bytes: Data) throws {
+    guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
+    guard running, let kernel else { sceneJSON = text; roleChangesPending = false; return }
+    let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
+    guard text.withCString({ lw_kernel_publish_role_scene_json(kernel, $0, sampleRate) }) != 0 else {
+      throw NSError(domain: "Latticewake", code: 5, userInfo: [NSLocalizedDescriptionKey: "A role change is already queued for the next loop boundary"])
+    }
+    sceneJSON = text
+    roleChangesPending = true
   }
 
   func start() throws {
@@ -170,6 +195,9 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
     running = false
     rolesRunning = false
     activeRoleLanes = 0
+    roleChangesPending = false
+    roleLoopProgress = 0
+    activeRolePlanGeneration = 0
   }
   func enqueueNoteOn(note: Int, velocity: Double, source: UInt32) -> Bool {
     guard let kernel else { return false }
