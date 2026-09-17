@@ -1,5 +1,8 @@
 # Latticewake development roadmap v3
 
+> Historical architecture sequence. The active productization and AUv3 plan is
+> [Productization Roadmap v4](PRODUCTIZATION_ROADMAP_V4.md).
+
 Latticewake's defining loop is: play the terrain, shape its traversal, grow it
 into a scene, freeze trusted components, preview deterministic variations, and
 capture or sequence the result. Terrain remains the defining instrument through
