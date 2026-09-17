@@ -43,7 +43,7 @@ human listening result is claimed. A Cycle 032 target-device smoke run is
 recorded as technical evidence only.
 
 The native Terrain Stage now uses a fixed luminous-cartography shell with a
-persistent terrain surface, top transport, Perform/Sculpt/Grow depth, six
+persistent terrain surface, top transport, Perform/Sculpt/Grow depth, seven
 playable scene macros, four performance lane cards, contextual drawers, and a
 separate diagnostics sheet. It renders the immutable C++ terrain trace through
 the Canvas baseline; the retained Metal adapter remains pending a target-Mac
@@ -51,6 +51,14 @@ idle-cost admission check. Scene v1 Analytic/Image/Audio source descriptors are
 visible through a source-aware presentation model, but image import and audible
 media analysis are not yet implemented. See the
 [media-terrain interface boundary](docs/MEDIA_TERRAIN_INTERFACE.md).
+The audible A/B and output contract is documented in the
+[signature terrain voice specification](docs/SIGNATURE_TERRAIN_VOICE.md).
+
+The terrain voice now prepares both Scene v1 analytic Surface layers and makes
+their scene morph and gesture extension audible. Its fixed output path adds
+Tone, Drive, tempo-related Space, and stereo Width without callback allocation.
+Eight unranked starter candidates provide technically varied first sounds; no
+human palette approval is inferred from their validation.
 
 Core MIDI packet/ownership routing is covered by virtual-source fixtures, but
 automatic endpoint connection is currently disarmed at app launch pending a

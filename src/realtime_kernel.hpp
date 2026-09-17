@@ -20,6 +20,12 @@ struct PreparedTerrainPlan {
   float gesturePitchDepth{1.0F};
   float gestureTimbreDepth{1.0F};
   float pressureGainDepth{1.0F};
+  float surfaceMorph{};
+  float tone{1.0F};
+  float drive{};
+  float space{};
+  float stereoMotion{};
+  float tempoBPM{120.0F};
   bool ready{};
 };
 bool prepareTerrainPlan(const Scene& scene, double sampleRate, PreparedTerrainPlan& plan) noexcept;
@@ -29,10 +35,18 @@ class RealtimeKernel {
   bool prepare(const Scene& scene, double sampleRate) noexcept;
   bool activate(const PreparedTerrainPlan& plan) noexcept;
   bool render(std::span<float> mono, std::span<const KernelEvent> events) noexcept;
+  bool renderStereo(std::span<float> left, std::span<float> right,
+                    std::span<const KernelEvent> events) noexcept;
   void reset() noexcept;
  private:
   struct Voice { bool active{}; int note{}; std::uint32_t source{}; float phase{}; float increment{}; float gain{}; float glide{}; float press{1.0F}; float slide{}; float envelope{}; bool releasing{}; float releaseStep{}; std::size_t age{}; float smoothGlide{}; float smoothSlide{}; };
+  static constexpr std::size_t kMaximumDelaySamples=192000;
+  bool renderInternal(std::span<float> left, std::span<float> right,
+                      std::span<const KernelEvent> events) noexcept;
   std::size_t nextAge_{};
   PreparedTerrainPlan ownedPlan_{}; const PreparedTerrainPlan* activePlan_{}; std::array<Voice,kMaxVoices> voices_{};
-  float sampleRate_{48000}, previousInput_{}, previousOutput_{}, glide_{}, press_{1.0F}, slide_{}; bool ready_{};
+  std::array<float,kMaximumDelaySamples> delayLeft_{}, delayRight_{};
+  std::size_t delayWrite_{}, delayWarmup_{};
+  float sampleRate_{48000}, previousInput_{}, previousOutput_{}, filterLeft_{}, filterRight_{},
+        motionPhase_{}, glide_{}, press_{1.0F}, slide_{}; bool ready_{};
 }; }

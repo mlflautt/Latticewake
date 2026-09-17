@@ -80,6 +80,30 @@ bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate, Ren
     return false;
   }
   if (!build(scene.compatibilityScene, sampleRate, output, error)) return false;
+  if (scene.surface.layers[0].sourceType != SurfaceSourceType::analytic ||
+      scene.surface.layers[1].sourceType != SurfaceSourceType::analytic) {
+    error = {"surface.layers", "media-derived Surface assets are not prepared yet"};
+    return false;
+  }
+  Scene layerScene = scene.compatibilityScene;
+  layerScene.path = scene.traversal.path;
+  PreparedTerrainPlan layerA;
+  layerScene.terrain = scene.surface.layers[0].analytic;
+  if (!prepareTerrainPlan(layerScene, sampleRate, layerA)) {
+    error = {"surface.layers[0]", "could not prepare analytic Surface layer A"};
+    return false;
+  }
+  PreparedTerrainPlan layerB;
+  layerScene.terrain = scene.surface.layers[1].analytic;
+  if (!prepareTerrainPlan(layerScene, sampleRate, layerB)) {
+    error = {"surface.layers[1]", "could not prepare analytic Surface layer B"};
+    return false;
+  }
+  output.terrain.terrainTable = layerA.terrainTable;
+  output.terrain.morphTable = layerB.terrainTable;
+  output.terrain.variation = std::max(layerA.variation, layerB.variation);
+  output.terrain.surfaceMorph = static_cast<float>(scene.surface.morph);
+  output.terrain.tempoBPM = static_cast<float>(scene.harmony.context.tempoBPM);
   const auto& articulation = scene.articulation;
   output.terrain.attackSeconds = std::max(0.001F, static_cast<float>(articulation.attackSeconds));
   output.terrain.releaseSeconds = std::max(0.001F, static_cast<float>(articulation.releaseSeconds));
@@ -88,6 +112,10 @@ bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate, Ren
   output.terrain.velocityResponse = static_cast<float>(articulation.velocityResponse);
   output.terrain.pressureResponse = static_cast<float>(articulation.pressureResponse);
   output.terrain.slideResponse = static_cast<float>(articulation.slideResponse);
+  output.terrain.tone = static_cast<float>(articulation.tone);
+  output.terrain.drive = static_cast<float>(articulation.drive);
+  output.terrain.space = static_cast<float>(articulation.space);
+  output.terrain.stereoMotion = static_cast<float>(articulation.stereoMotion);
   // An empty graph preserves the direct-play mappings used by Scene v0. Once a
   // Scene v1 route is present, the graph explicitly owns the three supported
   // per-note expression destinations.

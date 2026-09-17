@@ -63,6 +63,15 @@ ValidationIssues validateSceneV1(const SceneV1& scene) {
     if (layer.asset && (layer.asset->assetId.empty() || layer.asset->contentHash.empty() ||
                         layer.asset->mediaType.empty()))
       issues.push_back({field, "descriptor fields must not be empty"});
+    if (layer.sourceType == SurfaceSourceType::analytic) {
+      Scene layerScene = scene.compatibilityScene;
+      layerScene.terrain = layer.analytic;
+      const auto layerIssues = validateScene(layerScene);
+      for (const auto& issue : layerIssues)
+        if (issue.field.starts_with("terrain."))
+          issues.push_back({"surface.layers[" + std::to_string(index) + "].analytic." +
+                                issue.field.substr(8), issue.message});
+    }
   }
   if (scene.traversal.samplingDistribution != "uniform")
     issues.push_back({"traversal.samplingDistribution", "only uniform is supported in Scene v1"});
@@ -80,6 +89,14 @@ ValidationIssues validateSceneV1(const SceneV1& scene) {
   for (const auto& [field, value] : articulationValues)
     if (!std::isfinite(value) || value < 0.0)
       issues.push_back({std::string(field), "must be finite and nonnegative"});
+  const std::pair<std::string_view, double> outputValues[] = {
+      {"articulation.tone", scene.articulation.tone},
+      {"articulation.drive", scene.articulation.drive},
+      {"articulation.space", scene.articulation.space},
+      {"articulation.stereoMotion", scene.articulation.stereoMotion}};
+  for (const auto& [field, value] : outputValues)
+    if (!std::isfinite(value) || value < 0.0 || value > 1.0)
+      issues.push_back({std::string(field), "must be finite and in [0, 1]"});
   if (scene.articulation.voiceBehavior != "polyphonic-oldest-steal")
     issues.push_back({"articulation.voiceBehavior", "unsupported voice behavior"});
   if (scene.lineage.sourceSceneHash.empty())

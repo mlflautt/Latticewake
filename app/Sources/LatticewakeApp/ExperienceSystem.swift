@@ -94,9 +94,9 @@ struct StageTopBar: View {
 
       Menu {
         Menu("Starter Scenes") {
-          Button("Sustained Terrain") { selectStarter(0) }
-          Button("Gesture Terrain") { selectStarter(1) }
-          Button("Four Role Loop") { selectStarter(2) }
+          ForEach(DemoScene.signatureStarters) { starter in
+            Button(starter.name) { selectStarter(starter.id) }
+          }
         }
         .disabled(sceneChangesBlocked)
         Button("New Gesture Scene", action: newScene).disabled(sceneChangesBlocked)
@@ -195,12 +195,13 @@ struct StageMacroRail: View {
 
   var body: some View {
     HStack(spacing: 8) {
-      macro("Contour", value: $controls.terrainDetail, range: 0...1, format: "%.0f%%", scale: 100)
-      macro("Scale", value: $controls.terrainZoom, range: 0...1, format: "%.0f%%", scale: 100)
+      macro("Morph", value: $controls.surfaceMorph, range: 0...1, format: "%.0f%%", scale: 100)
+      macro("Tone", value: $controls.tone, range: 0...1, format: "%.0f%%", scale: 100)
       macro("Motion", value: $controls.traversalRateRatio, range: 0...1, format: "%.0f%%", scale: 100)
-      macro("Orbit", value: $controls.traversalRadiusX, range: 0...1, format: "%.0f%%", scale: 100)
+      macro("Drive", value: $controls.drive, range: 0...1, format: "%.0f%%", scale: 100)
+      macro("Space", value: $controls.space, range: 0...1, format: "%.0f%%", scale: 100)
       macro("Release", value: $controls.releaseSeconds, range: 0.001...2, format: "%.2fs")
-      macro("Expression", value: $controls.pressureResponse, range: 0...2, format: "%.0f%%", scale: 50)
+      macro("Width", value: $controls.stereoMotion, range: 0...1, format: "%.0f%%", scale: 100)
     }
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Terrain performance macros")

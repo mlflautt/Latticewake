@@ -33,12 +33,34 @@ bool RealtimeKernel::activate(const PreparedTerrainPlan& plan) noexcept {
 }
 void RealtimeKernel::reset() noexcept {
   for (auto& v : voices_) v = {};
-  nextAge_ = 0; previousInput_ = previousOutput_ = glide_ = slide_ = 0; press_ = 1;
+  nextAge_ = 0; previousInput_ = previousOutput_ = filterLeft_ = filterRight_ = 0;
+  motionPhase_ = glide_ = slide_ = 0; press_ = 1; delayWrite_ = delayWarmup_ = 0;
 }
 bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> events) noexcept {
-  if (!ready_ || !activePlan_ || events.size() > kMaxEvents) return false;
+  return renderInternal(out, {}, events);
+}
+bool RealtimeKernel::renderStereo(std::span<float> left, std::span<float> right,
+                                  std::span<const KernelEvent> events) noexcept {
+  if (left.size() != right.size()) return false;
+  return renderInternal(left, right, events);
+}
+bool RealtimeKernel::renderInternal(std::span<float> out, std::span<float> right,
+                                    std::span<const KernelEvent> events) noexcept {
+  if (!ready_ || !activePlan_ || events.size() > kMaxEvents ||
+      (!right.empty() && right.size() != out.size())) return false;
   std::size_t next = 0;
   const float smoothing = 1.0F - std::exp(-1.0F / (.010F * sampleRate_));
+  const float cutoff = 180.0F + 17820.0F * activePlan_->tone * activePlan_->tone;
+  const float filterCoefficient = activePlan_->tone >= 0.999F
+                                      ? 1.0F
+                                      : 1.0F - std::exp(-6.28318530718F * cutoff / sampleRate_);
+  const float driveGain = 1.0F + 7.0F * activePlan_->drive;
+  const float driveNormalization = std::tanh(driveGain);
+  const std::size_t delaySamples = std::clamp<std::size_t>(
+      static_cast<std::size_t>(sampleRate_ * 45.0F / std::max(30.0F, activePlan_->tempoBPM)),
+      1U, kMaximumDelaySamples - 1U);
+  const float wet = 0.34F * activePlan_->space;
+  const float feedback = 0.18F + 0.42F * activePlan_->space;
   for (std::size_t f = 0; f < out.size(); ++f) {
     while (next < events.size() && events[next].frame == f) {
       const auto& e = events[next++];
@@ -89,7 +111,9 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
       const float routedSlide = activePlan_->gestureTimbreDepth >= 0.0F
                                     ? v.smoothSlide * activePlan_->gestureTimbreDepth
                                     : (1.0F - v.smoothSlide) * -activePlan_->gestureTimbreDepth;
-      const float slide = std::clamp(routedSlide * activePlan_->slideResponse, 0.0F, 1.0F);
+      const float expressionMorph = std::clamp(routedSlide * activePlan_->slideResponse, 0.0F, 1.0F);
+      const float slide = std::clamp(activePlan_->surfaceMorph +
+                                     expressionMorph * (1.0F - activePlan_->surfaceMorph), 0.0F, 1.0F);
       const float pressure = activePlan_->pressureResponse == 0.0F
                                  ? 1.0F
                                  : std::pow(std::max(0.0F, v.press), activePlan_->pressureResponse);
@@ -99,8 +123,32 @@ bool RealtimeKernel::render(std::span<float> out, std::span<const KernelEvent> e
       v.phase -= std::floor(v.phase);
     }
     const float dc = input - previousInput_ + 0.997F * previousOutput_;
-    out[f] = dc / (1 + std::fabs(dc)); previousInput_ = input; previousOutput_ = dc;
-    if (!std::isfinite(out[f])) { reset(); out[f] = 0; }
+    previousInput_ = input; previousOutput_ = dc;
+    const float shaped = activePlan_->drive <= 0.0001F
+                             ? dc
+                             : std::tanh(dc * driveGain) / std::max(0.001F, driveNormalization);
+    filterLeft_ += filterCoefficient * (shaped - filterLeft_);
+    filterRight_ += filterCoefficient * (shaped - filterRight_);
+    const std::size_t readIndex = (delayWrite_ + kMaximumDelaySamples - delaySamples) % kMaximumDelaySamples;
+    const bool delayReady = delayWarmup_ >= delaySamples;
+    const float delayedLeft = delayReady ? delayLeft_[readIndex] : 0.0F;
+    const float delayedRight = delayReady ? delayRight_[readIndex] : 0.0F;
+    const float motion = std::sin(motionPhase_) * activePlan_->stereoMotion;
+    motionPhase_ += 6.28318530718F * 0.083F / sampleRate_;
+    if (motionPhase_ >= 6.28318530718F) motionPhase_ -= 6.28318530718F;
+    const float dryLeft = filterLeft_ * (1.0F - 0.22F * motion);
+    const float dryRight = filterRight_ * (1.0F + 0.22F * motion);
+    const float leftValue = (dryLeft + wet * delayedRight) / (1.0F + std::fabs(dryLeft + wet * delayedRight));
+    const float rightValue = (dryRight + wet * delayedLeft) / (1.0F + std::fabs(dryRight + wet * delayedLeft));
+    delayLeft_[delayWrite_] = dryLeft + feedback * delayedRight;
+    delayRight_[delayWrite_] = dryRight + feedback * delayedLeft;
+    delayWrite_ = (delayWrite_ + 1U) % kMaximumDelaySamples;
+    if (delayWarmup_ < delaySamples) ++delayWarmup_;
+    out[f] = leftValue;
+    if (!right.empty()) right[f] = rightValue;
+    if (!std::isfinite(out[f]) || (!right.empty() && !std::isfinite(right[f]))) {
+      reset(); out[f] = 0; if (!right.empty()) right[f] = 0;
+    }
   }
   return next == events.size();
 }

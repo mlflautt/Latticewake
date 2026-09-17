@@ -32,12 +32,14 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(GestureState.normalized(-20,length: 200), 0)
 }
 
-  func testAudioCallbackRunsOnBackgroundThread() async {
+  func testAudioCallbackRunsOnBackgroundThread() async throws {
+  let sceneBytes = try DemoScene.signatureStarters[4].sceneBytes()
+  let sceneJSON = String(decoding: sceneBytes, as: UTF8.self)
   let success = await withCheckedContinuation { continuation in
     DispatchQueue.global().async {
       let kernel = lw_kernel_create()!
       defer { lw_kernel_destroy(kernel) }
-      let prepared = DemoScene.playableJSON.withCString { lw_kernel_prepare_scene_json(kernel, $0, 48000) }
+      let prepared = sceneJSON.withCString { lw_kernel_prepare_scene_json(kernel, $0, 48000) }
       let block = makeCallbackRenderBlock(CallbackRenderState(kernel: kernel))
       let format = AVAudioFormat(standardFormatWithSampleRate: 48000, channels: 2)!
       let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 512)!
@@ -49,8 +51,8 @@ final class LatticewakeAppTests: XCTestCase {
       let left = buffer.floatChannelData![0]
       let right = buffer.floatChannelData![1]
       let audible = (0..<512).contains { abs(left[$0]) > 0.00001 }
-      let stereo = (0..<512).allSatisfy { left[$0] == right[$0] }
-      continuation.resume(returning: prepared == 1 && result == 0 && audible && stereo && !Thread.isMainThread)
+      let stereoIsDistinct = (0..<512).contains { left[$0] != right[$0] }
+      continuation.resume(returning: prepared == 1 && result == 0 && audible && stereoIsDistinct && !Thread.isMainThread)
     }
   }
   XCTAssertTrue(success)
@@ -59,7 +61,7 @@ final class LatticewakeAppTests: XCTestCase {
   @MainActor func testOptInDeviceSmoke() async throws {
   guard ProcessInfo.processInfo.environment["LW_DEVICE_SMOKE"] == "1" else { return }
   let audio = LatticewakeAudio()
-  try audio.setScene(bytes: Data(DemoScene.playableJSON.utf8))
+  try audio.setScene(bytes: DemoScene.signatureStarters[4].sceneBytes())
   try audio.start()
   defer { audio.stop() }
   XCTAssertTrue(audio.enqueueNoteOn(note: 60, velocity: 0.7, source: PerformanceInputSource.keyboard.token))
@@ -467,6 +469,20 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(savedReceipt, receipt)
 }
 
+  func testSignatureDemonstrationsAreBoundAndDistinct() throws {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let bytes = try DemoScene.signatureStarters[4].sceneBytes()
+    let demonstrations = try OfflineCapture.renderSignatureDemonstrations(sceneBytes: bytes, to: directory)
+    XCTAssertEqual(demonstrations.map(\.1.fixture), ["midi-notes", "terrain-gesture"])
+    XCTAssertTrue(demonstrations.allSatisfy { $0.1.sceneSHA256 == SceneLibrary.receipt(for: bytes).sha256 })
+    let first = try Data(contentsOf: demonstrations[0].0)
+    let second = try Data(contentsOf: demonstrations[1].0)
+    XCTAssertNotEqual(first, second)
+    XCTAssertEqual(first.prefix(4), Data("RIFF".utf8))
+    XCTAssertEqual(second.prefix(4), Data("RIFF".utf8))
+  }
+
   func testRoleTracePreviewIsDeterministic() throws {
   let bytes = Data(DemoScene.canonicalJSON.utf8)
   let first = try RoleTraceBridge.preview(sceneBytes: bytes)
@@ -485,6 +501,23 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(receipt.machineLine, "LW_AUDITION_RECEIPT sample_rate=48000.0 callbacks=12 frames=6144 max_render_ns=123000 deadline_misses=0 rejected_blocks=0")
   XCTAssertTrue(receipt.statusText.contains("48000 Hz"))
   XCTAssertTrue(receipt.fileContents.hasSuffix("\n"))
+  }
+
+  func testSignatureStarterPaletteIsDistinctAndRoundTripsMacros() throws {
+    XCTAssertEqual(DemoScene.signatureStarters.count, 8)
+    var hashes = Set<String>()
+    for starter in DemoScene.signatureStarters {
+      let bytes = try starter.sceneBytes()
+      hashes.insert(SceneLibrary.receipt(for: bytes).sha256)
+      let controls = try SceneEditorBridge.controls(from: bytes)
+      XCTAssertEqual(controls.surfaceMorph, starter.controls.surfaceMorph, accuracy: 0.000001)
+      XCTAssertEqual(controls.layerBDetail, starter.controls.layerBDetail, accuracy: 0.000001)
+      XCTAssertEqual(controls.tone, starter.controls.tone, accuracy: 0.000001)
+      XCTAssertEqual(controls.drive, starter.controls.drive, accuracy: 0.000001)
+      XCTAssertEqual(controls.space, starter.controls.space, accuracy: 0.000001)
+      XCTAssertEqual(controls.stereoMotion, starter.controls.stereoMotion, accuracy: 0.000001)
+    }
+    XCTAssertEqual(hashes.count, DemoScene.signatureStarters.count)
   }
 
   func testSurfacePresentationMigratesAnalyticSceneAndDescribesImageLayer() throws {

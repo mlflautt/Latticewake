@@ -338,11 +338,12 @@ struct ContentView: View {
   }
 
   private func selectStarterAtIndex(_ index: Int) {
-    switch index {
-    case 0: selectStarter(DemoScene.sustainedJSON, label: "Sustained Terrain")
-    case 2: selectStarter(DemoScene.fourRoleJSON, label: "Four Role Loop")
-    default: selectStarter(DemoScene.gestureJSON, label: "Gesture Terrain")
-    }
+    guard let starter = DemoScene.signatureStarters.first(where: { $0.id == index }) else { return }
+    do {
+      performance = .init()
+      try installScene(starter.sceneBytes(), url: nil, recordUndo: true, dirty: false)
+      receipt = "\(starter.name) — unsaved"
+    } catch { self.error = error.localizedDescription }
   }
 
   private func applyRoleChanges() {

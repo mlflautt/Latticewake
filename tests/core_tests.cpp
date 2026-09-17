@@ -242,6 +242,15 @@ void testSceneV1MigrationAndRenderPlan() {
   articulated.articulation.velocityResponse = 0.25;
   articulated.articulation.pressureResponse = 0.5;
   articulated.articulation.slideResponse = 0.75;
+  articulated.articulation.tone = 0.44;
+  articulated.articulation.drive = 0.35;
+  articulated.articulation.space = 0.52;
+  articulated.articulation.stereoMotion = 0.67;
+  articulated.surface.morph = 0.63;
+  articulated.surface.layers[1].analytic.detail = 0.18;
+  articulated.surface.layers[1].analytic.zoom = 0.24;
+  articulated.surface.layers[1].analytic.offsetX = 0.13;
+  articulated.surface.layers[1].analytic.offsetY = 0.77;
   articulated.modulation.routes = {
       {"route-pitch", "gesture-x", "pitch", "per-note", 0.5},
       {"route-timbre", "gesture-y", "timbre", "per-note", -0.25},
@@ -257,6 +266,18 @@ void testSceneV1MigrationAndRenderPlan() {
   assert(articulatedPlan.terrain.gesturePitchDepth == 0.5F);
   assert(articulatedPlan.terrain.gestureTimbreDepth == -0.25F);
   assert(articulatedPlan.terrain.pressureGainDepth == 0.75F);
+  assert(articulatedPlan.terrain.surfaceMorph == 0.63F);
+  assert(articulatedPlan.terrain.tone == 0.44F);
+  assert(articulatedPlan.terrain.drive == 0.35F);
+  assert(articulatedPlan.terrain.space == 0.52F);
+  assert(articulatedPlan.terrain.stereoMotion == 0.67F);
+  assert(articulatedPlan.terrain.terrainTable != articulatedPlan.terrain.morphTable);
+  const auto articulatedBytes = serializeSceneV1(articulated, serializationError);
+  assert(articulatedBytes.has_value());
+  const auto articulatedRoundTrip = parseSceneV1(*articulatedBytes, serializationError);
+  assert(articulatedRoundTrip.has_value());
+  assert(articulatedRoundTrip->surface.layers[1].analytic.offsetY == 0.77);
+  assert(articulatedRoundTrip->articulation.space == 0.52);
   RoleEventGenerationError roleError;
   const auto legacyTrace = generateRoleEvents(source, 0, renderPlan.roleLoopFrames,
                                                {48000, source.harmonicContext.tempoBPM}, roleError);

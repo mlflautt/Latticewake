@@ -16,10 +16,18 @@ stays playable while Library and Inspector drawers provide contextual depth.
 The Cycle 057 product shell makes Perform, Sculpt, and Grow progressive depths
 over that persistent Stage. A fixed top bar owns standalone audio, role
 transport, scene actions, output, undo, diagnostics, and panic. Six prepared
-scene controls form the first macro rail, while lane cards separate direct
+scene controls formed the first macro rail, while lane cards separate direct
 performance from detailed lane editing. The current Canvas route remains the
 admitted visual baseline; the retained Metal renderer is not described as
 production-authoritative until its target-device cost is admitted.
+
+Cycle 058 gives the macro rail stable sound semantics: Morph crossfades the two
+prepared analytic Surface layers, Tone shapes bandwidth, Motion changes
+traversal, Drive adds bounded saturation, Space controls a tempo-related
+cross-feedback ambience, Release shapes the envelope, and Width controls slow
+stereo drift. The eight starter candidates exercise these controls with
+deliberately different technical profiles; their names are descriptive, not
+ratings or aesthetic selections.
 
 Image and audio Surface descriptors are now visible to the UI without file
 access from rendering. A future resolved image Surface uses its source image as
@@ -41,8 +49,12 @@ Metal, Core Audio, Core MIDI, and a future AUv3 are adapters.
 
 The current core has one prepared terrain voice. Scene v1 now separates
 **Surface**, **Traversal**, and **Articulation**, and one portable
-RenderPlanBuilder is the preparation authority for terrain tables and bounded
-role timing. The later internal
+RenderPlanBuilder is the preparation authority for two independently serialized
+analytic Surface tables, the scene morph, articulation/output coefficients, and
+bounded role timing. The callback interpolates A/B without parsing or
+allocation. A fixed stereo output section uses preallocated delay state; reset
+invalidates its history in constant time rather than clearing it on the audio
+thread. The later internal
 **EngineRack** provides prepared slots with a stable expressive contract for
 note identity, pitch/glide, velocity, pressure, slide, timbre, modulation,
 gate, and panic. Terrain remains the signature engine; a terrain-excited

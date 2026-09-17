@@ -18,6 +18,7 @@ import LatticewakeBridge
 @_silgen_name("lw_kernel_panic") private func lw_kernel_panic(_ kernel: OpaquePointer) -> Int32
 @_silgen_name("lw_kernel_set_roles_running") private func lw_kernel_set_roles_running(_ kernel: OpaquePointer, _ running: UInt32)
 @_silgen_name("lw_kernel_render") private func lw_kernel_render(_ kernel: OpaquePointer, _ output: UnsafeMutablePointer<Float>, _ frames: UInt32) -> Int32
+@_silgen_name("lw_kernel_render_stereo") private func lw_kernel_render_stereo(_ kernel: OpaquePointer, _ left: UnsafeMutablePointer<Float>, _ right: UnsafeMutablePointer<Float>, _ frames: UInt32) -> Int32
 
 private struct BridgeCallbackStatus {
   var callbackCount: UInt64 = 0
@@ -57,8 +58,15 @@ private enum CallbackRenderRoute {
     let buffers = UnsafeMutableAudioBufferListPointer(audioBufferList)
     guard let firstBuffer = buffers.first, let firstData = firstBuffer.mData else { return noErr }
     let first = firstData.assumingMemoryBound(to: Float.self)
-    let rendered = lw_kernel_render(kernel, first, frameCount)
-    var index = 1
+    let rendered: Int32
+    var copyStart = 1
+    if buffers.count > 1, let rightData = buffers[1].mData {
+      rendered = lw_kernel_render_stereo(kernel, first, rightData.assumingMemoryBound(to: Float.self), frameCount)
+      copyStart = 2
+    } else {
+      rendered = lw_kernel_render(kernel, first, frameCount)
+    }
+    var index = copyStart
     while index < buffers.count {
       let buffer = buffers[index]
       if let destination = buffer.mData {

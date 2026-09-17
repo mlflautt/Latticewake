@@ -68,6 +68,15 @@ typedef struct LWSceneEditorControls {
   double velocity_response;
   double pressure_response;
   double slide_response;
+  double surface_morph;
+  double layer_b_detail;
+  double layer_b_zoom;
+  double layer_b_offset_x;
+  double layer_b_offset_y;
+  double tone;
+  double drive;
+  double space;
+  double stereo_motion;
 } LWSceneEditorControls;
 typedef struct LWModulationControls {
   unsigned int pitch_enabled;
@@ -116,6 +125,7 @@ int lw_kernel_note_expression(LWKernelRef* kernel, int note, float glide, float 
 int lw_kernel_note_expression_source(LWKernelRef* kernel, int note, float glide, float press, float slide, unsigned int source);
 int lw_kernel_panic(LWKernelRef* kernel);
 int lw_kernel_render(LWKernelRef* kernel, float* output, unsigned int frames);
+int lw_kernel_render_stereo(LWKernelRef* kernel, float* left, float* right, unsigned int frames);
 int lw_kernel_status(const LWKernelRef* kernel, LWKernelStatus* status);
 void lw_kernel_set_roles_running(LWKernelRef* kernel, unsigned int running);
 int lw_kernel_role_status(const LWKernelRef* kernel, LWRoleStatus* status);

@@ -190,6 +190,45 @@ bool optionalString(const JsonObject& value, const std::string_view name,
   return true;
 }
 
+bool optionalNumber(const JsonObject& value, const std::string_view name, double& out,
+                    const std::string_view path, SceneSerializationError& error) {
+  const Json* input = field(value, name);
+  if (!input) return true;
+  const auto* numeric = number(*input);
+  if (!numeric) { error = {std::string(path) + "." + std::string(name), "must be a number"}; return false; }
+  out = *numeric;
+  return true;
+}
+
+void appendTerrainObject(std::string& out, const Terrain& terrain) {
+  out += "{\"kind\":"; appendString(out, terrain.kind);
+  const std::pair<std::string_view, double> values[] = {
+      {"detail", terrain.detail}, {"zoom", terrain.zoom}, {"offsetX", terrain.offsetX},
+      {"offsetY", terrain.offsetY}, {"rotation", terrain.rotation}, {"motion", terrain.motion}};
+  for (const auto& [name, value] : values) { out += ",\""; out += name; out += "\":"; appendNumber(out, value); }
+  out += ",\"maxIterations\":" + std::to_string(terrain.maxIterations);
+  out += ",\"normalization\":"; appendNumber(out, terrain.normalization); out += '}';
+}
+
+bool parseTerrainObject(const Json& value, Terrain& terrain, const std::string_view path,
+                        SceneSerializationError& error) {
+  const auto* objectValue = object(value);
+  const std::set<std::string, std::less<>> fields = {
+      "kind", "detail", "zoom", "offsetX", "offsetY", "rotation", "motion",
+      "maxIterations", "normalization"};
+  return objectValue && fieldsAreExact(*objectValue, fields, {}, path, error) &&
+         requiredString(*objectValue, "kind", terrain.kind, path, error) &&
+         requiredNumber(*objectValue, "detail", terrain.detail, path, error) &&
+         requiredNumber(*objectValue, "zoom", terrain.zoom, path, error) &&
+         requiredNumber(*objectValue, "offsetX", terrain.offsetX, path, error) &&
+         requiredNumber(*objectValue, "offsetY", terrain.offsetY, path, error) &&
+         requiredNumber(*objectValue, "rotation", terrain.rotation, path, error) &&
+         requiredNumber(*objectValue, "motion", terrain.motion, path, error) &&
+         parseUnsigned32(*field(*objectValue, "maxIterations"), terrain.maxIterations,
+                         std::string(path) + ".maxIterations", error) &&
+         requiredNumber(*objectValue, "normalization", terrain.normalization, path, error);
+}
+
 bool stringArray(const JsonObject& value, const std::string_view name,
                  std::vector<std::string>& out, const std::string_view path,
                  SceneSerializationError& error) {
@@ -235,6 +274,7 @@ std::optional<std::string> serializeSceneV1(const SceneV1& scene,
     const auto& layer = scene.surface.layers[index];
     out += "{\"componentID\":"; appendString(out, layer.componentId);
     out += ",\"sourceType\":"; appendString(out, sourceTypeName(layer.sourceType));
+    out += ",\"analytic\":"; appendTerrainObject(out, layer.analytic);
     out += ",\"assetID\":"; if (layer.asset) appendString(out, layer.asset->assetId); else out += "null";
     out += ",\"assetHash\":"; if (layer.asset) appendString(out, layer.asset->contentHash); else out += "null";
     out += ",\"mediaType\":"; if (layer.asset) appendString(out, layer.asset->mediaType); else out += "null";
@@ -251,7 +291,9 @@ std::optional<std::string> serializeSceneV1(const SceneV1& scene,
       {"attackSeconds", articulation.attackSeconds}, {"releaseSeconds", articulation.releaseSeconds},
       {"gain", articulation.gain}, {"glideSemitones", articulation.glideSemitones},
       {"velocityResponse", articulation.velocityResponse}, {"pressureResponse", articulation.pressureResponse},
-      {"slideResponse", articulation.slideResponse}};
+      {"slideResponse", articulation.slideResponse}, {"tone", articulation.tone},
+      {"drive", articulation.drive}, {"space", articulation.space},
+      {"stereoMotion", articulation.stereoMotion}};
   for (const auto& [name, value] : articulationValues) { out += ",\""; out += name; out += "\":"; appendNumber(out, value); }
   out += ",\"voiceBehavior\":"; appendString(out, articulation.voiceBehavior); out += '}';
   out += ",\"harmony\":{\"componentID\":"; appendString(out, scene.harmony.componentId);
@@ -318,11 +360,12 @@ std::optional<SceneV1> parseSceneV1(const std::string_view bytes,
   const auto* layers = array(*field(*surface, "layers"));
   if (!layers || layers->size() != 2) { error = {"surface.layers", "must contain exactly two layers"}; return std::nullopt; }
   const std::set<std::string, std::less<>> layerFields = {"componentID", "sourceType", "assetID", "assetHash", "mediaType"};
+  const std::set<std::string, std::less<>> layerOptionalFields = {"analytic"};
   for (std::size_t index = 0; index < layers->size(); ++index) {
     const auto* layer = object((*layers)[index]);
     std::string sourceType;
     std::optional<std::string> assetId, assetHash, mediaType;
-    if (!layer || !fieldsAreExact(*layer, layerFields, {}, "surface.layers", error) ||
+    if (!layer || !fieldsAreExact(*layer, layerFields, layerOptionalFields, "surface.layers", error) ||
         !requiredString(*layer, "componentID", result.surface.layers[index].componentId, "surface.layers", error) ||
         !requiredString(*layer, "sourceType", sourceType, "surface.layers", error) ||
         !optionalString(*layer, "assetID", assetId, "surface.layers", error) ||
@@ -336,6 +379,10 @@ std::optional<SceneV1> parseSceneV1(const std::string_view bytes,
     const bool allAsset = assetId && assetHash && mediaType;
     if (anyAsset != allAsset) { error = {"surface.layers.asset", "asset fields must be all present or all null"}; return std::nullopt; }
     if (allAsset) result.surface.layers[index].asset = AssetDescriptor{*assetId, *assetHash, *mediaType};
+    if (const auto* analytic = field(*layer, "analytic")) {
+      if (!parseTerrainObject(*analytic, result.surface.layers[index].analytic,
+                              "surface.layers.analytic", error)) return std::nullopt;
+    }
   }
 
   const auto* traversal = object(*field(*top, "traversal"));
@@ -348,7 +395,8 @@ std::optional<SceneV1> parseSceneV1(const std::string_view bytes,
 
   const auto* articulation = object(*field(*top, "articulation"));
   const std::set<std::string, std::less<>> articulationFields = {"componentID", "attackSeconds", "releaseSeconds", "gain", "glideSemitones", "velocityResponse", "pressureResponse", "slideResponse", "voiceBehavior"};
-  if (!articulation || !fieldsAreExact(*articulation, articulationFields, {}, "articulation", error) ||
+  const std::set<std::string, std::less<>> articulationOptionalFields = {"tone", "drive", "space", "stereoMotion"};
+  if (!articulation || !fieldsAreExact(*articulation, articulationFields, articulationOptionalFields, "articulation", error) ||
       !requiredString(*articulation, "componentID", result.articulation.componentId, "articulation", error) ||
       !requiredNumber(*articulation, "attackSeconds", result.articulation.attackSeconds, "articulation", error) ||
       !requiredNumber(*articulation, "releaseSeconds", result.articulation.releaseSeconds, "articulation", error) ||
@@ -357,7 +405,11 @@ std::optional<SceneV1> parseSceneV1(const std::string_view bytes,
       !requiredNumber(*articulation, "velocityResponse", result.articulation.velocityResponse, "articulation", error) ||
       !requiredNumber(*articulation, "pressureResponse", result.articulation.pressureResponse, "articulation", error) ||
       !requiredNumber(*articulation, "slideResponse", result.articulation.slideResponse, "articulation", error) ||
-      !requiredString(*articulation, "voiceBehavior", result.articulation.voiceBehavior, "articulation", error)) return std::nullopt;
+      !requiredString(*articulation, "voiceBehavior", result.articulation.voiceBehavior, "articulation", error) ||
+      !optionalNumber(*articulation, "tone", result.articulation.tone, "articulation", error) ||
+      !optionalNumber(*articulation, "drive", result.articulation.drive, "articulation", error) ||
+      !optionalNumber(*articulation, "space", result.articulation.space, "articulation", error) ||
+      !optionalNumber(*articulation, "stereoMotion", result.articulation.stereoMotion, "articulation", error)) return std::nullopt;
 
   const auto* harmony = object(*field(*top, "harmony"));
   const std::set<std::string, std::less<>> harmonyFields = {"componentID", "transportDivision"};

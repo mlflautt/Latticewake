@@ -19,6 +19,15 @@ private struct BridgeSceneEditorControls {
   var velocityResponse: Double = 1
   var pressureResponse: Double = 1
   var slideResponse: Double = 1
+  var surfaceMorph: Double = 0
+  var layerBDetail: Double = 0.5
+  var layerBZoom: Double = 0.5
+  var layerBOffsetX: Double = 0.5
+  var layerBOffsetY: Double = 0.5
+  var tone: Double = 0.72
+  var drive: Double = 0.08
+  var space: Double = 0.12
+  var stereoMotion: Double = 0.18
 }
 
 @_silgen_name("lw_scene_editor_controls") private func lw_scene_editor_controls(
@@ -48,6 +57,15 @@ struct SceneEditorControls: Equatable {
   var velocityResponse: Double = 1
   var pressureResponse: Double = 1
   var slideResponse: Double = 1
+  var surfaceMorph: Double = 0
+  var layerBDetail: Double = 0.5
+  var layerBZoom: Double = 0.5
+  var layerBOffsetX: Double = 0.5
+  var layerBOffsetY: Double = 0.5
+  var tone: Double = 0.72
+  var drive: Double = 0.08
+  var space: Double = 0.12
+  var stereoMotion: Double = 0.18
 }
 
 enum SceneEditorPreset: String, CaseIterable, Identifiable {
@@ -91,7 +109,11 @@ enum SceneEditorBridge {
                                traversalTranslationX: bridge.traversalTranslationX, traversalTranslationY: bridge.traversalTranslationY,
                                attackSeconds: bridge.attackSeconds, releaseSeconds: bridge.releaseSeconds, gain: bridge.gain,
                                glideSemitones: bridge.glideSemitones, velocityResponse: bridge.velocityResponse,
-                               pressureResponse: bridge.pressureResponse, slideResponse: bridge.slideResponse)
+                               pressureResponse: bridge.pressureResponse, slideResponse: bridge.slideResponse,
+                               surfaceMorph: bridge.surfaceMorph, layerBDetail: bridge.layerBDetail,
+                               layerBZoom: bridge.layerBZoom, layerBOffsetX: bridge.layerBOffsetX,
+                               layerBOffsetY: bridge.layerBOffsetY, tone: bridge.tone, drive: bridge.drive,
+                               space: bridge.space, stereoMotion: bridge.stereoMotion)
   }
 
   static func apply(_ controls: SceneEditorControls, to bytes: Data) throws -> Data {
@@ -106,7 +128,11 @@ enum SceneEditorBridge {
                                            attackSeconds: controls.attackSeconds, releaseSeconds: controls.releaseSeconds,
                                            gain: controls.gain, glideSemitones: controls.glideSemitones,
                                            velocityResponse: controls.velocityResponse, pressureResponse: controls.pressureResponse,
-                                           slideResponse: controls.slideResponse)
+                                           slideResponse: controls.slideResponse, surfaceMorph: controls.surfaceMorph,
+                                           layerBDetail: controls.layerBDetail, layerBZoom: controls.layerBZoom,
+                                           layerBOffsetX: controls.layerBOffsetX, layerBOffsetY: controls.layerBOffsetY,
+                                           tone: controls.tone, drive: controls.drive, space: controls.space,
+                                           stereoMotion: controls.stereoMotion)
     var output: UnsafeMutablePointer<CChar>?
     let success = json.withCString { source in
       withUnsafePointer(to: &bridge) { input in

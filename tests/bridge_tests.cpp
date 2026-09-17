@@ -157,6 +157,15 @@ void testSceneV1BridgeMigrationAndPreparation() {
   editor.attack_seconds = 0.040;
   editor.release_seconds = 0.240;
   editor.gain = 0.5;
+  editor.surface_morph = 0.65;
+  editor.layer_b_detail = 0.22;
+  editor.layer_b_zoom = 0.31;
+  editor.layer_b_offset_x = 0.18;
+  editor.layer_b_offset_y = 0.76;
+  editor.tone = 0.43;
+  editor.drive = 0.36;
+  editor.space = 0.52;
+  editor.stereo_motion = 0.71;
   char* editedEditor = nullptr;
   assert(lw_scene_apply_editor_controls(first, &editor, &editedEditor) == 1);
   assert(editedEditor != nullptr);
@@ -166,6 +175,13 @@ void testSceneV1BridgeMigrationAndPreparation() {
   assert(roundTripEditor.traversal_radius_y == editor.traversal_radius_y);
   assert(roundTripEditor.attack_seconds == editor.attack_seconds);
   assert(roundTripEditor.gain == editor.gain);
+  assert(roundTripEditor.surface_morph == editor.surface_morph);
+  assert(roundTripEditor.layer_b_detail == editor.layer_b_detail);
+  assert(roundTripEditor.layer_b_zoom == editor.layer_b_zoom);
+  assert(roundTripEditor.tone == editor.tone);
+  assert(roundTripEditor.drive == editor.drive);
+  assert(roundTripEditor.space == editor.space);
+  assert(roundTripEditor.stereo_motion == editor.stereo_motion);
   LWKernelRef* const editedKernel = lw_kernel_create();
   assert(editedKernel != nullptr);
   assert(lw_kernel_prepare_scene_json(editedKernel, editedEditor, 48000.0) == 1);
@@ -173,6 +189,12 @@ void testSceneV1BridgeMigrationAndPreparation() {
   assert(lw_kernel_note_on(editedKernel, 60, 0.7F) == 1);
   assert(lw_kernel_render(editedKernel, editedOutput.data(), static_cast<unsigned int>(editedOutput.size())) == 1);
   assert(editedOutput != output);
+  std::array<float, 512> stereoLeft{};
+  std::array<float, 512> stereoRight{};
+  assert(lw_kernel_note_on_source(editedKernel, 67, 0.6F, 19U) == 1);
+  assert(lw_kernel_render_stereo(editedKernel, stereoLeft.data(), stereoRight.data(),
+                                 static_cast<unsigned int>(stereoLeft.size())) == 1);
+  assert(stereoLeft != stereoRight);
   lw_kernel_destroy(editedKernel);
   lw_string_destroy(editedEditor);
 
@@ -348,6 +370,7 @@ void testRolePlanPublishesExactlyAtLoopBoundary() {
 void testCallbackRouteStressAndBounds() {
   assert(lw_kernel_maximum_callback_frames() == 4096U);
   std::array<float, 4096> output{};
+  std::array<float, 4096> rightOutput{};
   constexpr std::array<unsigned int, 6> frameCounts{32U, 64U, 128U, 256U, 512U, 1024U};
   constexpr std::array<double, 3> sampleRates{44100.0, 48000.0, 96000.0};
   std::array<LWKernelRef*, sampleRates.size()> kernels{};
@@ -363,7 +386,8 @@ void testCallbackRouteStressAndBounds() {
     for (unsigned int iteration = 0; iteration < 400U; ++iteration) {
       assert(lw_kernel_note_on(kernel, 60 + static_cast<int>(iteration % 8U), 0.6F) == 1);
       const unsigned int frames = frameCounts[iteration % frameCounts.size()];
-      assert(lw_kernel_render(kernel, output.data(), frames) == 1);
+      if(iteration%2U==0U) assert(lw_kernel_render(kernel, output.data(), frames) == 1);
+      else assert(lw_kernel_render_stereo(kernel, output.data(), rightOutput.data(), frames) == 1);
       expectedFrames += frames;
     }
     LWCallbackStatus status{};

@@ -289,9 +289,12 @@ int lw_scene_editor_controls(const char* json,LWSceneEditorControls* controls) {
   if(!v0)return 0;
   const auto& terrain=v0->terrain; const auto& path=v0->path;
   const auto articulation=v1?v1->articulation:latticewake::ArticulationComponent{};
+  const auto& layerB=v1?v1->surface.layers[1].analytic:terrain;
   *controls={terrain.detail,terrain.zoom,terrain.offsetX,terrain.offsetY,path.rateRatio,path.radiusX,path.radiusY,path.angle,path.translationX,path.translationY,
              articulation.attackSeconds,articulation.releaseSeconds,articulation.gain,articulation.glideSemitones,
-             articulation.velocityResponse,articulation.pressureResponse,articulation.slideResponse};
+             articulation.velocityResponse,articulation.pressureResponse,articulation.slideResponse,
+             v1?v1->surface.morph:0.0,layerB.detail,layerB.zoom,layerB.offsetX,layerB.offsetY,
+             articulation.tone,articulation.drive,articulation.space,articulation.stereoMotion};
   return 1;
 }
 int lw_scene_apply_editor_controls(const char* json,const LWSceneEditorControls* controls,char** canonicalJson) {
@@ -299,8 +302,13 @@ int lw_scene_apply_editor_controls(const char* json,const LWSceneEditorControls*
   const double values[]={controls->terrain_detail,controls->terrain_zoom,controls->terrain_offset_x,controls->terrain_offset_y,
                          controls->traversal_rate_ratio,controls->traversal_radius_x,controls->traversal_radius_y,controls->traversal_angle,
                          controls->traversal_translation_x,controls->traversal_translation_y,controls->attack_seconds,controls->release_seconds,
-                         controls->gain,controls->glide_semitones,controls->velocity_response,controls->pressure_response,controls->slide_response};
+                         controls->gain,controls->glide_semitones,controls->velocity_response,controls->pressure_response,controls->slide_response,
+                         controls->surface_morph,controls->layer_b_detail,controls->layer_b_zoom,controls->layer_b_offset_x,controls->layer_b_offset_y,
+                         controls->tone,controls->drive,controls->space,controls->stereo_motion};
   for(const double value:values) if(!std::isfinite(value))return 0;
+  if(controls->surface_morph<0.0||controls->surface_morph>1.0||controls->tone<0.0||controls->tone>1.0||
+     controls->drive<0.0||controls->drive>1.0||controls->space<0.0||controls->space>1.0||
+     controls->stereo_motion<0.0||controls->stereo_motion>1.0)return 0;
   latticewake::SceneSerializationError error;
   auto v1=latticewake::parseSceneV1(json,error);
   if(!v1)return 0;
@@ -310,12 +318,20 @@ int lw_scene_apply_editor_controls(const char* json,const LWSceneEditorControls*
   scene.path.rateRatio=controls->traversal_rate_ratio; scene.path.radiusX=controls->traversal_radius_x;
   scene.path.radiusY=controls->traversal_radius_y; scene.path.angle=controls->traversal_angle;
   scene.path.translationX=controls->traversal_translation_x; scene.path.translationY=controls->traversal_translation_y;
-  for(auto& layer:v1->surface.layers) if(layer.sourceType==latticewake::SurfaceSourceType::analytic) layer.analytic=scene.terrain;
+  if(v1->surface.layers[0].sourceType==latticewake::SurfaceSourceType::analytic) v1->surface.layers[0].analytic=scene.terrain;
+  if(v1->surface.layers[1].sourceType==latticewake::SurfaceSourceType::analytic) {
+    auto& layerB=v1->surface.layers[1].analytic;
+    layerB.detail=controls->layer_b_detail; layerB.zoom=controls->layer_b_zoom;
+    layerB.offsetX=controls->layer_b_offset_x; layerB.offsetY=controls->layer_b_offset_y;
+  }
+  v1->surface.morph=controls->surface_morph;
   v1->traversal.path=scene.path;
   v1->articulation.attackSeconds=controls->attack_seconds; v1->articulation.releaseSeconds=controls->release_seconds;
   v1->articulation.gain=controls->gain; v1->articulation.glideSemitones=controls->glide_semitones;
   v1->articulation.velocityResponse=controls->velocity_response; v1->articulation.pressureResponse=controls->pressure_response;
   v1->articulation.slideResponse=controls->slide_response;
+  v1->articulation.tone=controls->tone; v1->articulation.drive=controls->drive;
+  v1->articulation.space=controls->space; v1->articulation.stereoMotion=controls->stereo_motion;
   const auto serialized=latticewake::serializeSceneV1(*v1,error);
   if(!serialized)return 0;
   char* result=static_cast<char*>(std::malloc(serialized->size()+1U));if(!result)return 0;
@@ -439,7 +455,7 @@ int lw_kernel_role_status(const LWKernelRef* k,LWRoleStatus* status) {
            pending==kNoPlan?0U:k->rolePlans[pending].generation.load(std::memory_order_acquire)};
   return 1;
 }
-int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
+static int renderKernel(LWKernelRef* k,float* out,float* right,unsigned int frames) {
   if(!k||!out)return 0;
   if(frames==0||frames>kMaximumCallbackFrames) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
   const auto started=std::chrono::steady_clock::now();
@@ -543,9 +559,16 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
     ++count;
   }
   const std::uint32_t active=k->activePlan.load(std::memory_order_acquire);
-  const bool rendered=k->plans[active].kernel.render(std::span<float>(out,frames),std::span<const latticewake::KernelEvent>(events.data(),count));
+  const bool rendered=right
+      ? k->plans[active].kernel.renderStereo(std::span<float>(out,frames),std::span<float>(right,frames),
+                                            std::span<const latticewake::KernelEvent>(events.data(),count))
+      : k->plans[active].kernel.render(std::span<float>(out,frames),
+                                      std::span<const latticewake::KernelEvent>(events.data(),count));
   float peak=0;
-  if(rendered) for(unsigned int i=0;i<frames;++i) peak=std::max(peak,std::fabs(out[i]));
+  if(rendered) for(unsigned int i=0;i<frames;++i) {
+    peak=std::max(peak,std::fabs(out[i]));
+    if(right) peak=std::max(peak,std::fabs(right[i]));
+  }
   std::uint32_t activeLanes=0;
   for(const int note:k->activeRoleNotes) if(note>=0) ++activeLanes;
   k->activeRoleLanes.store(activeLanes,std::memory_order_release);
@@ -558,6 +581,13 @@ int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
   k->callbackCount.fetch_add(1,std::memory_order_relaxed);
   k->renderedFrames.fetch_add(frames,std::memory_order_relaxed);
   return 1;
+}
+int lw_kernel_render(LWKernelRef* k,float* out,unsigned int frames) {
+  return renderKernel(k,out,nullptr,frames);
+}
+int lw_kernel_render_stereo(LWKernelRef* k,float* left,float* right,unsigned int frames) {
+  if(!right)return 0;
+  return renderKernel(k,left,right,frames);
 }
 int lw_kernel_status(const LWKernelRef* k,LWKernelStatus* status) {
   if(!k||!status)return 0;

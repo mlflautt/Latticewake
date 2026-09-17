@@ -53,6 +53,10 @@ struct ArticulationComponent {
   double velocityResponse{1.0};
   double pressureResponse{1.0};
   double slideResponse{1.0};
+  double tone{0.72};
+  double drive{0.08};
+  double space{0.12};
+  double stereoMotion{0.18};
   std::string voiceBehavior{"polyphonic-oldest-steal"};
 };
 
