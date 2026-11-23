@@ -176,20 +176,26 @@ struct TerrainContourSurface: View {
   }
 
   @ViewBuilder private var sourcePlane: some View {
-    if source.primaryLayer.kind == .image, let media,
-       media.assetID == source.primaryLayer.assetID {
+    if source.visualLayer.kind == .image, let media,
+       media.assetID == source.visualLayer.assetID {
       Image(nsImage: media.image)
-        .resizable().scaledToFill().saturation(0.62).contrast(1.08)
+        .resizable().saturation(0.62).contrast(1.08)
         .overlay(Color(red: 0.01, green: 0.04, blue: 0.08).opacity(0.42))
+        .overlay {
+          if let interpretation = media.interpretation {
+            Image(nsImage: interpretation).resizable()
+              .blendMode(.screen).opacity(0.28)
+          }
+        }
         .clipped()
-    } else if source.primaryLayer.kind == .image {
+    } else if source.visualLayer.kind == .image {
       ZStack {
         LinearGradient(colors: [Color(red: 0.035, green: 0.055, blue: 0.09),
                                 Color(red: 0.012, green: 0.026, blue: 0.052)],
                        startPoint: .topLeading, endPoint: .bottomTrailing)
         VStack(spacing: 5) {
           Image(systemName: "photo.badge.exclamationmark").font(.title2)
-          Text(source.primaryLayer.displayName).font(.caption)
+          Text(source.visualLayer.displayName).font(.caption)
           Text("Image source is referenced but not resolved on this Mac")
             .font(.caption2).foregroundStyle(.secondary)
         }
@@ -204,6 +210,15 @@ struct TerrainContourSurface: View {
   }
 
   private func drawContours(context: GraphicsContext, size: CGSize) {
+    if source.visualLayer.kind == .image, let media, media.assetID == source.visualLayer.assetID {
+      var imageContours = Path()
+      for segment in media.contours {
+        imageContours.move(to: CGPoint(x: segment.start.x * size.width, y: segment.start.y * size.height))
+        imageContours.addLine(to: CGPoint(x: segment.end.x * size.width, y: segment.end.y * size.height))
+      }
+      context.stroke(imageContours, with: .color(.cyan.opacity(0.62)), lineWidth: 0.8)
+      return
+    }
     var grid = Path()
     for fraction in [0.2, 0.4, 0.6, 0.8] {
       grid.move(to: CGPoint(x: size.width * fraction, y: 0)); grid.addLine(to: CGPoint(x: size.width * fraction, y: size.height))

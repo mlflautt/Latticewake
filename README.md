@@ -47,9 +47,9 @@ persistent terrain surface, top transport, Perform/Sculpt/Grow depth, seven
 playable scene macros, four performance lane cards, contextual drawers, and a
 separate diagnostics sheet. It renders the immutable C++ terrain trace through
 the Canvas baseline; the retained Metal adapter remains pending a target-Mac
-idle-cost admission check. Scene v1 Analytic/Image/Audio source descriptors are
-visible through a source-aware presentation model, but image import and audible
-media analysis are not yet implemented. See the
+idle-cost admission check. Scene v1 now supports bounded image-derived terrain
+fields through an offline luminance importer, Layer A/B preview and acceptance,
+embedded library assets, and RenderPlanBuilder preparation. See the
 [media-terrain interface boundary](docs/MEDIA_TERRAIN_INTERFACE.md).
 The supplied image-ingest and macOS Stage reports, with design decisions and
 unverified claims separated, are indexed in the

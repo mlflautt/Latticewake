@@ -45,6 +45,13 @@ struct ContentView: View {
   @State private var workspace: StageWorkspace = .perform
   @State private var inspectorPage: StageInspectorPage = .sculpt
   @State private var surfacePresentation = TerrainSurfacePresentation.analyticDefault
+  @State private var activeSurfaceMedia: TerrainSurfaceMedia?
+  @State private var surfaceAssets: [String: ImageTerrainAsset] = [:]
+  @State private var candidateImageAsset: ImageTerrainAsset?
+  @State private var candidateImageName = ""
+  @State private var imageTargetLayer = 0
+  @State private var imageImportStatus = ""
+  @State private var importingImage = false
   @AppStorage("latticewake.stage.firstPlayHintDismissed") private var firstPlayHintDismissed = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   private var roleEditStatus: String {
@@ -146,7 +153,8 @@ struct ContentView: View {
                 GeometryReader { stage in
                   TerrainContourSurface(snapshot: terrain.snapshot, pointer: input.pointerPosition,
                                         heldNotes: input.heldNotes.sorted(), activeLanes: audio.activeRoleLanes,
-                                        source: surfacePresentation, shapingNotes: input.shapingNotes,
+                                        source: surfacePresentation, media: activeSurfaceMedia,
+                                        shapingNotes: input.shapingNotes,
                                         pointerNote: input.pointerNote, pointerGestureActive: input.pointerGestureActive)
                     .frame(width: max(1, stage.size.width), height: max(1, stage.size.height))
                     .contentShape(Rectangle())
@@ -226,6 +234,7 @@ struct ContentView: View {
                   switch inspectorPage {
                   case .sculpt:
                     Text("Surface · Traversal · Articulation").font(.caption).foregroundStyle(.secondary)
+                    imageSurfaceControls
                     SceneEditorView(controls: $editorControls, apply: applyEditorChanges,
                                     preview: previewEditorChanges, captureA: { previewABytes = sceneBytes },
                                     previewA: previewA, returnToCurrent: returnToCurrent,
@@ -335,7 +344,123 @@ struct ContentView: View {
     }.onDisappear { input.focusLost(); midi.stop(); audio.stop() }
   }
 
+  private func makeSurfaceMedia(presentation: TerrainSurfacePresentation,
+                                assets: [String: ImageTerrainAsset]) -> TerrainSurfaceMedia? {
+    let layer = presentation.visualLayer
+    guard layer.kind == .image, let hash = layer.assetHash,
+          let asset = assets[hash], let image = asset.previewImage else { return nil }
+    return TerrainSurfaceMedia(assetID: layer.assetID ?? hash, image: image,
+                               interpretation: asset.interpretationImage,
+                               contours: asset.contourSegments(),
+                               sampledPathVariation: asset.sampledPathVariation(terrain.snapshot.points.map {
+                                 CGPoint(x: $0.x, y: $0.y)
+                               }))
+  }
+
+  @ViewBuilder private var imageSurfaceControls: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("IMAGE SURFACE").font(.caption2.monospaced()).foregroundStyle(LatticewakeDesign.cyan)
+      if let imageLayer = surfacePresentation.layers.first(where: { $0.kind == .image }) {
+        if let hash = imageLayer.assetHash, let asset = surfaceAssets[hash] {
+          Text("\(imageLayer.id.hasSuffix(":b") ? "Layer B" : "Layer A") · \(asset.sourceName)")
+            .font(.caption.weight(.medium)).lineLimit(1)
+          Text("Source \(asset.sourceSHA256.prefix(10)) · Field \(asset.contentHash.prefix(10)) · \(asset.providerVersion)")
+            .font(.caption2.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+        } else {
+          Label("Image field is missing; audio cannot prepare it", systemImage: "exclamationmark.triangle")
+            .font(.caption2).foregroundStyle(LatticewakeDesign.amber)
+        }
+      }
+      Picker("Replace layer", selection: $imageTargetLayer) {
+        Text("Layer A").tag(0); Text("Layer B").tag(1)
+      }.pickerStyle(.segmented)
+      Button(importingImage ? "Preparing image…" : "Choose Image…", action: chooseImage)
+        .disabled(importingImage)
+      if let candidateImageAsset {
+        HStack(spacing: 8) {
+          if let image = candidateImageAsset.previewImage {
+            Image(nsImage: image).resizable().scaledToFill().frame(width: 50, height: 50).clipped()
+              .clipShape(RoundedRectangle(cornerRadius: 6))
+          }
+          VStack(alignment: .leading, spacing: 3) {
+            Text(candidateImageName).font(.caption.weight(.medium)).lineLimit(1)
+            Text("256² luminance field · \(candidateImageAsset.contentHash.prefix(10))")
+              .font(.caption2.monospaced()).foregroundStyle(.secondary)
+          }
+        }
+        HStack {
+          Button("Preview", action: previewImageCandidate)
+          Button("Replace \(imageTargetLayer == 0 ? "A" : "B")", action: acceptImageCandidate)
+            .buttonStyle(.borderedProminent)
+          Button("Cancel", action: rejectImageCandidate)
+        }.controlSize(.small)
+      }
+      if !imageImportStatus.isEmpty {
+        Text(imageImportStatus).font(.caption2).foregroundStyle(.secondary).textSelection(.enabled)
+      }
+    }
+    .padding(10)
+    .background(.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+  }
+
+  private func chooseImage() {
+    let panel = NSOpenPanel()
+    panel.allowedContentTypes = [.image]
+    panel.allowsMultipleSelection = false
+    panel.canChooseDirectories = false
+    guard panel.runModal() == .OK, let url = panel.url else { return }
+    importingImage = true
+    imageImportStatus = "Decoding and preparing a bounded preview…"
+    Task {
+      do {
+        let asset = try await Task.detached(priority: .userInitiated) {
+          try ImageTerrainAsset.importImage(at: url)
+        }.value
+        candidateImageAsset = asset
+        candidateImageName = url.lastPathComponent
+        imageImportStatus = "Preview ready. Accept it to replace the selected Surface layer."
+      } catch { imageImportStatus = error.localizedDescription }
+      importingImage = false
+    }
+  }
+
+  private func previewImageCandidate() {
+    guard let candidateImageAsset else { return }
+    do {
+      var preparedAssets = surfaceAssets
+      preparedAssets[candidateImageAsset.id] = candidateImageAsset
+      let bytes = try SurfaceSceneBridge.replacingLayer(imageTargetLayer, with: candidateImageAsset, in: sceneBytes)
+      try previewTemporary(bytes, label: "Image Surface preview", assets: preparedAssets)
+      imageImportStatus = "Previewing Layer \(imageTargetLayer == 0 ? "A" : "B"); saved scene is unchanged."
+    } catch { imageImportStatus = error.localizedDescription }
+  }
+
+  private func acceptImageCandidate() {
+    guard let candidateImageAsset else { return }
+    do {
+      var preparedAssets = surfaceAssets
+      preparedAssets[candidateImageAsset.id] = candidateImageAsset
+      let bytes = try SurfaceSceneBridge.replacingLayer(imageTargetLayer, with: candidateImageAsset, in: sceneBytes)
+      try installScene(bytes, url: sceneURL, recordUndo: true, dirty: true, assets: preparedAssets)
+      let layerWeight = imageTargetLayer == 0 ? 1 - editorControls.surfaceMorph : editorControls.surfaceMorph
+      let morphHint = layerWeight < 0.01 ? " Current Morph does not yet sound that layer; adjust Morph to hear it." : ""
+      imageImportStatus = "Layer \(imageTargetLayer == 0 ? "A" : "B") accepted. Save the scene to keep its embedded image field.\(morphHint)"
+      self.candidateImageAsset = nil
+      candidateImageName = ""
+    } catch { imageImportStatus = error.localizedDescription }
+  }
+
+  private func rejectImageCandidate() {
+    if previewActive { returnToCurrent() }
+    candidateImageAsset = nil
+    candidateImageName = ""
+    imageImportStatus = "Image candidate discarded; the scene is unchanged."
+  }
+
   private var terrainIsFlat: Bool {
+    if surfacePresentation.visualLayer.kind == .image {
+      return (activeSurfaceMedia?.sampledPathVariation ?? 0) < 0.000001
+    }
     guard !terrain.snapshot.points.isEmpty else { return false }
     return (terrain.snapshot.points.map(\.value).max() ?? 0) -
       (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001
@@ -373,7 +498,7 @@ struct ContentView: View {
         try audio.queueRoleSceneAtLoop(bytes: runtimeBytes)
         if !sceneBytes.isEmpty {
           undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts,
-                             acceptedAgentReceipts: acceptedAgentReceipts)
+                             acceptedAgentReceipts: acceptedAgentReceipts, surfaceAssets: surfaceAssets)
         }
         queuedRoles = roles
         pendingRoleTrace = try RoleTraceBridge.preview(sceneBytes: runtimeBytes)
@@ -519,19 +644,25 @@ struct ContentView: View {
     catch { self.error = error.localizedDescription }
   }
 
-  private func previewTemporary(_ bytes: Data, label: String) throws {
+  private func previewTemporary(_ bytes: Data, label: String,
+                                assets: [String: ImageTerrainAsset]? = nil) throws {
+    if let assets { audio.registerSurfaceAssets(assets) }
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
     surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
+    if let assets { surfaceAssets = assets }
+    activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: surfaceAssets)
     previewActive = true
     receipt = "\(label) • Return restores current scene"
   }
 
   private func returnToCurrent() {
     do {
+      audio.registerSurfaceAssets(surfaceAssets)
       try audio.setScene(bytes: sceneBytes)
       try terrain.prepare(sceneBytes: sceneBytes)
       surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: sceneBytes)
+      activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: surfaceAssets)
       previewActive = false
       receipt = String(SceneLibrary.receipt(for: sceneBytes).sha256.prefix(12))
     } catch { self.error = error.localizedDescription }
@@ -544,8 +675,14 @@ struct ContentView: View {
     } catch { self.error = error.localizedDescription }
   }
 
-  private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool) throws {
-    if recordUndo, !sceneBytes.isEmpty { undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts) }
+  private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool,
+                            assets: [String: ImageTerrainAsset]? = nil) throws {
+    if recordUndo, !sceneBytes.isEmpty {
+      undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts,
+                         acceptedAgentReceipts: acceptedAgentReceipts, surfaceAssets: surfaceAssets)
+    }
+    let installedAssets = assets ?? surfaceAssets
+    audio.registerSurfaceAssets(installedAssets)
     try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
     let installedRoles = try RoleSceneBridge.controls(from: bytes)
@@ -554,6 +691,8 @@ struct ContentView: View {
     editorControls = try SceneEditorBridge.controls(from: bytes)
     modulationControls = try ModulationBridge.controls(from: bytes)
     surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
+    surfaceAssets = installedAssets
+    activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: installedAssets)
     let installedTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
     if audio.roleChangesPending {
       queuedRoles = installedRoles
@@ -569,6 +708,8 @@ struct ContentView: View {
     receipt = String(SceneLibrary.receipt(for: bytes).sha256.prefix(12))
     isDirty = dirty
     previewActive = false
+    candidateImageAsset = nil
+    candidateImageName = ""
     error = ""
   }
 
@@ -587,7 +728,9 @@ struct ContentView: View {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
       let migrated = try SceneDocumentBridge.canonicalV1(from: sceneBytes)
-      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance, acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts)
+      let document = SceneLibraryDocumentV1(sceneJSON: String(decoding: migrated, as: UTF8.self), performance: performance,
+        acceptedGrowReceipts: acceptedGrowReceipts, acceptedAgentReceipts: acceptedAgentReceipts,
+        surfaceAssets: referencedSurfaceAssets(in: migrated))
       let saved = try SceneLibrary.save(document, to: url)
       sceneBytes = migrated; sceneURL = url; isDirty = false
       receipt = "Saved Scene v1 \(String(saved.sha256.prefix(12)))"
@@ -604,14 +747,26 @@ struct ContentView: View {
       performance = loaded.performance
       acceptedGrowReceipts = loaded.acceptedGrowReceipts
       acceptedAgentReceipts = loaded.acceptedAgentReceipts
-      try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false)
+      try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false, assets: loaded.surfaceAssets)
       receipt = "Loaded \(loaded.originalSceneV0 ? "Scene v0" : "Library v1") \(String(loaded.receipt.sha256.prefix(12)))"
     } catch { self.error = error.localizedDescription }
   }
 
+  private func referencedSurfaceAssets(in bytes: Data) -> [String: ImageTerrainAsset] {
+    guard let root = try? JSONSerialization.jsonObject(with: bytes) as? [String: Any],
+          let surface = root["surface"] as? [String: Any],
+          let layers = surface["layers"] as? [[String: Any]] else { return [:] }
+    let hashes = layers.compactMap { $0["assetHash"] as? String }
+    return surfaceAssets.filter { hashes.contains($0.key) }
+  }
+
   private func undo() {
     guard let previous = undoHistory.undo() else { return }
-    do { acceptedGrowReceipts = previous.acceptedGrowReceipts; acceptedAgentReceipts = previous.acceptedAgentReceipts; try installScene(previous.sceneBytes, url: sceneURL, recordUndo: false, dirty: true) }
+    do {
+      acceptedGrowReceipts = previous.acceptedGrowReceipts
+      acceptedAgentReceipts = previous.acceptedAgentReceipts
+      try installScene(previous.sceneBytes, url: sceneURL, recordUndo: false, dirty: true, assets: previous.surfaceAssets)
+    }
     catch { self.error = error.localizedDescription }
   }
 

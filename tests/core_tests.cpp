@@ -272,6 +272,48 @@ void testSceneV1MigrationAndRenderPlan() {
   assert(articulatedPlan.terrain.space == 0.52F);
   assert(articulatedPlan.terrain.stereoMotion == 0.67F);
   assert(articulatedPlan.terrain.terrainTable != articulatedPlan.terrain.morphTable);
+
+  SceneV1 imageScene = migrated;
+  imageScene.surface.layers[0].sourceType = SurfaceSourceType::image;
+  imageScene.surface.layers[0].asset = AssetDescriptor{"fractal-field", "field-sha256-v1", "application/vnd.latticewake.surface-field-v1"};
+  constexpr std::uint32_t fieldEdge = 32;
+  std::array<std::uint16_t, fieldEdge * fieldEdge> fieldSamples{};
+  for (std::uint32_t y = 0; y < fieldEdge; ++y)
+    for (std::uint32_t x = 0; x < fieldEdge; ++x)
+      fieldSamples[static_cast<std::size_t>(y) * fieldEdge + x] = static_cast<std::uint16_t>(x * 65535U / (fieldEdge - 1U));
+  std::array<SurfaceFieldView, 2> fields{};
+  fields[0] = {fieldEdge, fieldEdge, fieldSamples, "field-sha256-v1"};
+  RenderPlan imagePlan;
+  assert(RenderPlanBuilder{}.build(imageScene, 48000, fields, imagePlan, renderError));
+  assert(imagePlan.ready && imagePlan.terrain.variation > 0.1F);
+  assert(imagePlan.terrain.terrainTable != renderPlan.terrain.terrainTable);
+  RenderPlan repeatedImagePlan;
+  assert(RenderPlanBuilder{}.build(imageScene, 48000, fields, repeatedImagePlan, renderError));
+  assert(repeatedImagePlan.terrain.terrainTable == imagePlan.terrain.terrainTable);
+  auto flatSamples = fieldSamples;
+  flatSamples.fill(32768);
+  auto flatFields = fields;
+  flatFields[0].samples = flatSamples;
+  SceneV1 flatImageScene = imageScene;
+  flatImageScene.surface.layers[0].asset->contentHash = "flat-field-hash";
+  flatFields[0].contentHash = "flat-field-hash";
+  RenderPlan flatImagePlan;
+  assert(RenderPlanBuilder{}.build(flatImageScene, 48000, flatFields, flatImagePlan, renderError));
+  assert(flatImagePlan.terrain.variation == 0.0F);
+  assert(flatImagePlan.diagnostic == TraversalDiagnostic::flat);
+  auto wrongHashFields = fields;
+  wrongHashFields[0].contentHash = "wrong-hash";
+  assert(!RenderPlanBuilder{}.build(imageScene, 48000, wrongHashFields, imagePlan, renderError));
+  assert(renderError.field == "surface.layers[0].asset");
+  auto shortFieldFields = fields;
+  shortFieldFields[0].samples = std::span<const std::uint16_t>(fieldSamples.data(), fieldSamples.size() - 1U);
+  assert(!RenderPlanBuilder{}.build(imageScene, 48000, shortFieldFields, imagePlan, renderError));
+  SceneV1 audioScene = migrated;
+  audioScene.surface.layers[0].sourceType = SurfaceSourceType::audio;
+  audioScene.surface.layers[0].asset = AssetDescriptor{"audio-field", "audio-hash", "audio/wav"};
+  assert(!RenderPlanBuilder{}.build(audioScene, 48000, fields, imagePlan, renderError));
+  assert(renderError.message.find("audio-derived") != std::string::npos);
+
   const auto articulatedBytes = serializeSceneV1(articulated, serializationError);
   assert(articulatedBytes.has_value());
   const auto articulatedRoundTrip = parseSceneV1(*articulatedBytes, serializationError);

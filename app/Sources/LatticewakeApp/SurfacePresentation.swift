@@ -45,6 +45,7 @@ struct TerrainSurfacePresentation: Equatable {
   )
 
   var primaryLayer: TerrainSurfaceLayerPresentation { layers.first ?? Self.analyticDefault.layers[0] }
+  var visualLayer: TerrainSurfaceLayerPresentation { layers[morph < 0.5 ? 0 : 1] }
 
   var sourceSummary: String {
     let a = layers.first?.kind.label ?? "Unknown"
@@ -85,8 +86,21 @@ struct TerrainSurfacePresentation: Equatable {
 struct TerrainSurfaceMedia: Equatable {
   let assetID: String
   let image: NSImage
+  let interpretation: NSImage?
+  let contours: [TerrainContourSegment]
+  let sampledPathVariation: Double
+
+  init(assetID: String, image: NSImage, interpretation: NSImage? = nil,
+       contours: [TerrainContourSegment] = [], sampledPathVariation: Double = 0) {
+    self.assetID = assetID
+    self.image = image
+    self.interpretation = interpretation
+    self.contours = contours
+    self.sampledPathVariation = sampledPathVariation
+  }
 
   static func == (lhs: TerrainSurfaceMedia, rhs: TerrainSurfaceMedia) -> Bool {
-    lhs.assetID == rhs.assetID && lhs.image === rhs.image
+    lhs.assetID == rhs.assetID && lhs.image === rhs.image && lhs.contours == rhs.contours &&
+      lhs.sampledPathVariation == rhs.sampledPathVariation
   }
 }

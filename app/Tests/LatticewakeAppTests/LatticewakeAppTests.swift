@@ -1,6 +1,9 @@
 import XCTest
 import Foundation
 import AVFoundation
+import AppKit
+import ImageIO
+import UniformTypeIdentifiers
 import LatticewakeBridge
 @testable import LatticewakeApp
 
@@ -231,6 +234,82 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(loaded.performance, settings)
   XCTAssertEqual(saved.sha256, loaded.receipt.sha256)
 }
+
+  func testImageSurfaceAssetAndSceneLibraryRoundTrip() throws {
+    var field = Data([0x4c, 0x57, 0x53, 0x46, 0x00, 0x01, 0x00, 0x04, 0x00, 0x04])
+    for sample in 0..<16 {
+      let value = UInt16(sample * 4096).bigEndian
+      withUnsafeBytes(of: value) { field.append(contentsOf: $0) }
+    }
+    let asset = try ImageTerrainAsset(sourceSHA256: String(repeating: "a", count: 64), sourceName: "fixture-fractal.png",
+                                      fieldBytes: field, sourcePreviewPNG: Data([1, 2, 3]))
+    XCTAssertEqual(asset.width, 4)
+    XCTAssertEqual(asset.height, 4)
+    XCTAssertEqual(asset.contentHash, ImageTerrainAsset.hash(field))
+    XCTAssertEqual(try asset.samples().count, 16)
+    XCTAssertThrowsError(try ImageTerrainAsset.decodeField(Data("invalid".utf8)))
+
+    let scene = try SurfaceSceneBridge.replacingLayer(1, with: asset,
+                                                       in: Data(DemoScene.fourRoleJSON.utf8))
+    let text = String(decoding: scene, as: UTF8.self)
+    XCTAssertTrue(text.contains("\"sourceType\":\"image\""))
+    XCTAssertTrue(text.contains(asset.contentHash))
+    XCTAssertTrue(text.contains(asset.sourceName))
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("image-scene.latticewake.json")
+    let document = SceneLibraryDocumentV1(sceneJSON: text, surfaceAssets: [asset.id: asset])
+    _ = try SceneLibrary.save(document, to: url)
+    let loaded = try SceneLibrary.load(from: url)
+    XCTAssertEqual(loaded.surfaceAssets[asset.id], asset)
+    XCTAssertEqual(try loaded.surfaceAssets[asset.id]?.samples(), try asset.samples())
+    XCTAssertEqual(loaded.sceneBytes, scene)
+    XCTAssertThrowsError(try SceneLibrary.save(SceneLibraryDocumentV1(sceneJSON: text),
+      to: directory.appendingPathComponent("missing-asset.latticewake.json"))) { error in
+        XCTAssertEqual(error as? SceneLibraryError, .missingSurfaceAsset(asset.id))
+      }
+  }
+
+  func testImageImportCreatesDeterministicBoundedFieldAndRegisteredPreview() throws {
+    let width = 8
+    let height = 4
+    var pixels = [UInt8](repeating: 255, count: width * height * 4)
+    for y in 0..<height {
+      for x in 0..<width {
+        let offset = (y * width + x) * 4
+        let value: UInt8 = x < 4 ? 0 : 255
+        pixels[offset] = value; pixels[offset + 1] = value; pixels[offset + 2] = value
+      }
+    }
+    let colorSpace = try XCTUnwrap(CGColorSpace(name: CGColorSpace.sRGB))
+    let cgImage = try pixels.withUnsafeMutableBytes { bytes in
+      try XCTUnwrap(CGContext(data: bytes.baseAddress, width: width, height: height,
+        bitsPerComponent: 8, bytesPerRow: width * 4, space: colorSpace,
+        bitmapInfo: CGBitmapInfo.byteOrder32Big.rawValue | CGImageAlphaInfo.premultipliedLast.rawValue)?.makeImage())
+    }
+    let pngData = NSMutableData()
+    let destination = try XCTUnwrap(CGImageDestinationCreateWithData(pngData, UTType.png.identifier as CFString, 1, nil))
+    CGImageDestinationAddImage(destination, cgImage, nil)
+    XCTAssertTrue(CGImageDestinationFinalize(destination))
+    let png = pngData as Data
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let url = directory.appendingPathComponent("split.png")
+    try png.write(to: url)
+    let first = try ImageTerrainAsset.importImage(at: url)
+    let second = try ImageTerrainAsset.importImage(at: url)
+    XCTAssertEqual(first.fieldBytes, second.fieldBytes)
+    XCTAssertEqual(first.contentHash, second.contentHash)
+    XCTAssertEqual(first.sourceSHA256, second.sourceSHA256)
+    XCTAssertEqual(first.width, ImageTerrainAsset.edge)
+    XCTAssertEqual(first.height, ImageTerrainAsset.edge)
+    XCTAssertNotNil(first.previewImage)
+    let samples = try first.samples()
+    XCTAssertEqual(samples.count, ImageTerrainAsset.edge * ImageTerrainAsset.edge)
+    XCTAssertGreaterThan(Set(samples).count, 1)
+  }
 
   func testGrowReceiptRoundTripsAndLegacyLibraryStaysReadable() throws {
     let proposal = GrowEngine.propose(base: .init(), sceneHash: "base", depth: .related,
@@ -467,6 +546,21 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(history.undo()?.sceneBytes, first)
   XCTAssertNil(history.undo())
 }
+
+  func testSceneUndoRetainsImageAssetsForRestoredScene() throws {
+    let field = Data([0x4c, 0x57, 0x53, 0x46, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02,
+                      0x00, 0x00, 0x40, 0x00, 0x80, 0x00, 0xff, 0xff])
+    let asset = try ImageTerrainAsset(sourceSHA256: String(repeating: "b", count: 64),
+                                      sourceName: "undo.png", fieldBytes: field, sourcePreviewPNG: Data([1]))
+    let imageScene = try SurfaceSceneBridge.replacingLayer(0, with: asset,
+      in: Data(DemoScene.gestureJSON.utf8))
+    var history = SceneUndoHistory()
+    history.record(imageScene, acceptedGrowReceipts: [], acceptedAgentReceipts: [],
+                   surfaceAssets: [asset.id: asset])
+    let restored = try XCTUnwrap(history.undo())
+    XCTAssertEqual(restored.surfaceAssets[asset.id], asset)
+    XCTAssertEqual(restored.sceneBytes, imageScene)
+  }
 
   func testOfflineCaptureWritesBoundSceneReceipt() throws {
   let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)

@@ -80,10 +80,36 @@ bank shape, and phase alignment as choices to compare against pinned fixtures.
 Select resource caps and algorithms from measured quality, preparation latency,
 and memory rather than report-proposed fixed dimensions or table-bank sizes.
 
-Cycle 057 added source-aware presentation structures and Stage labels; it did
-not add image import or analysis. The import pipeline, asset resolver, provider
-preview, and first audible image-derived Surface remain an explicit Cycle 060
-target. Keep the current Stage renderer unless target-Mac evidence identifies a
-specific limitation. Audio-derived Surfaces remain later work. The detailed
-research critique and proposed tests are in
+Cycle 057 added source-aware presentation structures and Stage labels; Cycle
+060 now adds the first image import, asset resolver, candidate preview, and
+image-derived Surface preparation. Keep the current Stage renderer unless
+target-Mac evidence identifies a specific limitation. Audio-derived Surfaces
+remain later work. The detailed research critique and proposed tests are in
 [`IMAGE_TERRAIN_REPORT_SYNTHESIS.md`](../research/IMAGE_TERRAIN_REPORT_SYNTHESIS.md).
+
+## Cycle 060 implementation boundary
+
+The first bounded image provider is `luminance-srgb-center-crop-v1`. It uses a
+256×256 field, creates an orientation-corrected thumbnail capped at 2048 pixels
+per edge, center-crops it to a square, composites transparency over neutral
+gray, then stores 16-bit big-endian values derived from 8-bit sRGB luminance.
+The canonical field bytes are `LWSF`, a 16-bit big-endian version (`1`), 16-bit
+big-endian width and height, then row-major 16-bit big-endian samples. SHA-256
+of these full bytes is the generated field hash. The source file hash and a
+cropped source preview are retained separately.
+
+The first import candidate is reviewed before it can replace Layer A or B.
+`Preview` prepares and auditions the image-derived field without changing the
+saved scene; `Replace A/B` accepts it; `Cancel` returns to the current scene.
+Scene Library v1 embeds the verified field and cropped source preview, so a
+saved image Surface reopens without its original file path. The Stage shows the
+registered source preview, a luminance interpretation overlay, bounded marching
+squares contours, the traversal path, and the selected layer. Audio preparation
+copies values into fixed render tables before publication; the callback never
+retains the imported field or image object.
+
+This is a deterministic stored-field contract, not a promise that two different
+OS image decoders will produce identical import bytes. The field hash binds the
+actual imported result, and provider version plus source hash preserve its
+provenance. Audio-derived import, multiple image providers, seam correction,
+phase alignment choices, and broader portability/export policy remain open.

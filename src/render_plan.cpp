@@ -1,6 +1,7 @@
 #include "render_plan.hpp"
 
 #include "role_event_generator.hpp"
+#include "terrain_evaluator.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,52 @@ int scaleNote(const Scene& scene, const int base, const int degree) {
   int index = degree % size;
   if (index < 0) { index += size; --octave; }
   return std::clamp(base + scale[static_cast<std::size_t>(index)] + 12 * octave, 0, 127);
+}
+
+float sampleField(const SurfaceFieldView& field, const double x, const double y) noexcept {
+  const double px = std::clamp((x + 1.0) * 0.5, 0.0, 1.0) * (field.width - 1U);
+  const double py = std::clamp((1.0 - y) * 0.5, 0.0, 1.0) * (field.height - 1U);
+  const auto x0 = static_cast<std::uint32_t>(px);
+  const auto y0 = static_cast<std::uint32_t>(py);
+  const auto x1 = std::min(x0 + 1U, field.width - 1U);
+  const auto y1 = std::min(y0 + 1U, field.height - 1U);
+  const double tx = px - x0;
+  const double ty = py - y0;
+  const auto value = [&field](const std::uint32_t sx, const std::uint32_t sy) {
+    const auto index = static_cast<std::size_t>(sy) * field.width + sx;
+    return static_cast<double>(field.samples[index]) / 65535.0;
+  };
+  const double top = value(x0, y0) + (value(x1, y0) - value(x0, y0)) * tx;
+  const double bottom = value(x0, y1) + (value(x1, y1) - value(x0, y1)) * tx;
+  return static_cast<float>(top + (bottom - top) * ty);
+}
+
+bool prepareImageSurface(const Scene& pathScene, const SurfaceFieldView& field,
+                         const double sampleRate, PreparedTerrainPlan& plan) noexcept {
+  if (!field.valid() || !std::isfinite(sampleRate) || sampleRate < 8000.0 || sampleRate > 192000.0)
+    return false;
+  float mean = 0.0F;
+  for (std::size_t i = 0; i < plan.terrainTable.size(); ++i) {
+    const double phase = static_cast<double>(i) / static_cast<double>(plan.terrainTable.size());
+    const auto path = evaluateAnalyticTerrain(pathScene, {phase, 0.0, 0.0});
+    const float value = static_cast<float>(2.0 * sampleField(field, path.pathX, path.pathY) - 1.0);
+    plan.terrainTable[i] = std::isfinite(value) ? value : 0.0F;
+    mean += plan.terrainTable[i] / static_cast<float>(plan.terrainTable.size());
+  }
+  const auto bounds = std::minmax_element(plan.terrainTable.begin(), plan.terrainTable.end());
+  plan.variation = *bounds.second - *bounds.first;
+  float peak = 0.0F;
+  for (auto& value : plan.terrainTable) {
+    value -= mean;
+    peak = std::max(peak, std::fabs(value));
+  }
+  for (auto& value : plan.terrainTable)
+    value = plan.variation > 1.0e-6F && peak > 1.0e-6F ? value / peak : 0.0F;
+  for (std::size_t i = 0; i < plan.morphTable.size(); ++i)
+    plan.morphTable[i] = 0.35F * plan.terrainTable[i] + 0.65F * plan.terrainTable[(2U * i) % plan.terrainTable.size()];
+  plan.sampleRate = static_cast<float>(sampleRate);
+  plan.ready = true;
+  return true;
 }
 }  // namespace
 
@@ -74,61 +121,90 @@ bool RenderPlanBuilder::build(const Scene& scene, const double sampleRate, Rende
 
 bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate, RenderPlan& output,
                               RenderPlanError& error) const {
+  return build(scene, sampleRate, std::array<SurfaceFieldView, 2>{}, output, error);
+}
+
+bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate,
+                              const std::array<SurfaceFieldView, 2>& fields,
+                              RenderPlan& output, RenderPlanError& error) const {
   const ValidationIssues validation = validateSceneV1(scene);
   if (!validation.empty()) {
     error = {validation.front().field, validation.front().message};
     return false;
   }
-  if (!build(scene.compatibilityScene, sampleRate, output, error)) return false;
-  if (scene.surface.layers[0].sourceType != SurfaceSourceType::analytic ||
-      scene.surface.layers[1].sourceType != SurfaceSourceType::analytic) {
-    error = {"surface.layers", "media-derived Surface assets are not prepared yet"};
-    return false;
-  }
+  RenderPlan candidate;
+  if (!build(scene.compatibilityScene, sampleRate, candidate, error)) return false;
   Scene layerScene = scene.compatibilityScene;
   layerScene.path = scene.traversal.path;
+  const auto prepareLayer = [&](const std::size_t index, PreparedTerrainPlan& prepared) {
+    const auto& layer = scene.surface.layers[index];
+    if (layer.sourceType == SurfaceSourceType::analytic) {
+      layerScene.terrain = layer.analytic;
+      return prepareTerrainPlan(layerScene, sampleRate, prepared);
+    }
+    if (layer.sourceType != SurfaceSourceType::image) {
+      error = {"surface.layers[" + std::to_string(index) + "]", "audio-derived Surface preparation is not implemented"};
+      return false;
+    }
+    if (!layer.asset || !fields[index].valid() || fields[index].contentHash != layer.asset->contentHash) {
+      error = {"surface.layers[" + std::to_string(index) + "].asset", "image Surface field is missing, invalid, or has a different content hash"};
+      return false;
+    }
+    if (!prepareImageSurface(layerScene, fields[index], sampleRate, prepared)) {
+      error = {"surface.layers[" + std::to_string(index) + "]", "image Surface field could not be prepared"};
+      return false;
+    }
+    return true;
+  };
   PreparedTerrainPlan layerA;
-  layerScene.terrain = scene.surface.layers[0].analytic;
-  if (!prepareTerrainPlan(layerScene, sampleRate, layerA)) {
-    error = {"surface.layers[0]", "could not prepare analytic Surface layer A"};
-    return false;
-  }
+  if (!prepareLayer(0, layerA)) return false;
   PreparedTerrainPlan layerB;
-  layerScene.terrain = scene.surface.layers[1].analytic;
-  if (!prepareTerrainPlan(layerScene, sampleRate, layerB)) {
-    error = {"surface.layers[1]", "could not prepare analytic Surface layer B"};
-    return false;
+  if (!prepareLayer(1, layerB)) return false;
+  candidate.terrain.terrainTable = layerA.terrainTable;
+  candidate.terrain.morphTable = layerB.terrainTable;
+  candidate.terrain.surfaceMorph = static_cast<float>(scene.surface.morph);
+  const auto morph = candidate.terrain.surfaceMorph;
+  auto mixedBounds = std::minmax_element(candidate.terrain.terrainTable.begin(), candidate.terrain.terrainTable.end());
+  float mixedMinimum = *mixedBounds.first;
+  float mixedMaximum = *mixedBounds.second;
+  for (std::size_t index = 0; index < candidate.terrain.terrainTable.size(); ++index) {
+    const float value = candidate.terrain.terrainTable[index] * (1.0F - morph) +
+                        candidate.terrain.morphTable[index] * morph;
+    mixedMinimum = std::min(mixedMinimum, value);
+    mixedMaximum = std::max(mixedMaximum, value);
   }
-  output.terrain.terrainTable = layerA.terrainTable;
-  output.terrain.morphTable = layerB.terrainTable;
-  output.terrain.variation = std::max(layerA.variation, layerB.variation);
-  output.terrain.surfaceMorph = static_cast<float>(scene.surface.morph);
-  output.terrain.tempoBPM = static_cast<float>(scene.harmony.context.tempoBPM);
+  candidate.terrain.variation = mixedMaximum - mixedMinimum;
+  candidate.terrain.tempoBPM = static_cast<float>(scene.harmony.context.tempoBPM);
   const auto& articulation = scene.articulation;
-  output.terrain.attackSeconds = std::max(0.001F, static_cast<float>(articulation.attackSeconds));
-  output.terrain.releaseSeconds = std::max(0.001F, static_cast<float>(articulation.releaseSeconds));
-  output.terrain.gain = static_cast<float>(articulation.gain);
-  output.terrain.glideSemitones = static_cast<float>(articulation.glideSemitones);
-  output.terrain.velocityResponse = static_cast<float>(articulation.velocityResponse);
-  output.terrain.pressureResponse = static_cast<float>(articulation.pressureResponse);
-  output.terrain.slideResponse = static_cast<float>(articulation.slideResponse);
-  output.terrain.tone = static_cast<float>(articulation.tone);
-  output.terrain.drive = static_cast<float>(articulation.drive);
-  output.terrain.space = static_cast<float>(articulation.space);
-  output.terrain.stereoMotion = static_cast<float>(articulation.stereoMotion);
+  candidate.terrain.attackSeconds = std::max(0.001F, static_cast<float>(articulation.attackSeconds));
+  candidate.terrain.releaseSeconds = std::max(0.001F, static_cast<float>(articulation.releaseSeconds));
+  candidate.terrain.gain = static_cast<float>(articulation.gain);
+  candidate.terrain.glideSemitones = static_cast<float>(articulation.glideSemitones);
+  candidate.terrain.velocityResponse = static_cast<float>(articulation.velocityResponse);
+  candidate.terrain.pressureResponse = static_cast<float>(articulation.pressureResponse);
+  candidate.terrain.slideResponse = static_cast<float>(articulation.slideResponse);
+  candidate.terrain.tone = static_cast<float>(articulation.tone);
+  candidate.terrain.drive = static_cast<float>(articulation.drive);
+  candidate.terrain.space = static_cast<float>(articulation.space);
+  candidate.terrain.stereoMotion = static_cast<float>(articulation.stereoMotion);
   // An empty graph preserves the direct-play mappings used by Scene v0. Once a
   // Scene v1 route is present, the graph explicitly owns the three supported
   // per-note expression destinations.
   if (!scene.modulation.routes.empty()) {
-    output.terrain.gesturePitchDepth = 0.0F;
-    output.terrain.gestureTimbreDepth = 0.0F;
-    output.terrain.pressureGainDepth = 0.0F;
+    candidate.terrain.gesturePitchDepth = 0.0F;
+    candidate.terrain.gestureTimbreDepth = 0.0F;
+    candidate.terrain.pressureGainDepth = 0.0F;
     for (const auto& route : scene.modulation.routes) {
-      if (route.source == "gesture-x") output.terrain.gesturePitchDepth = static_cast<float>(route.depth);
-      else if (route.source == "gesture-y") output.terrain.gestureTimbreDepth = static_cast<float>(route.depth);
-      else if (route.source == "pressure") output.terrain.pressureGainDepth = static_cast<float>(route.depth);
+      if (route.source == "gesture-x") candidate.terrain.gesturePitchDepth = static_cast<float>(route.depth);
+      else if (route.source == "gesture-y") candidate.terrain.gestureTimbreDepth = static_cast<float>(route.depth);
+      else if (route.source == "pressure") candidate.terrain.pressureGainDepth = static_cast<float>(route.depth);
     }
   }
+  candidate.diagnostic = candidate.terrain.variation <= 1.0e-6F
+                             ? TraversalDiagnostic::flat
+                             : TraversalDiagnostic::pitched;
+  candidate.ready = true;
+  output = std::move(candidate);
   return true;
 }
 

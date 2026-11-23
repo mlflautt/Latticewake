@@ -227,6 +227,57 @@ void testSceneV1BridgeMigrationAndPreparation() {
   lw_string_destroy(first);
 }
 
+void testImageSurfaceFieldCAbi() {
+  char* migrated = nullptr;
+  assert(lw_scene_migrate_v1_json(kCanonicalScene, "sha256:image-fixture", &migrated) == 1);
+  assert(migrated != nullptr);
+  std::string imageScene(migrated);
+  lw_string_destroy(migrated);
+  const auto replaceOnce = [&imageScene](const std::string_view from, const std::string_view to) {
+    const auto position = imageScene.find(from);
+    assert(position != std::string::npos);
+    imageScene.replace(position, from.size(), to);
+  };
+  replaceOnce("\"sourceType\":\"analytic\"", "\"sourceType\":\"image\"");
+  replaceOnce("\"assetID\":null", "\"assetID\":\"image-fixture\"");
+  replaceOnce("\"assetHash\":null", "\"assetHash\":\"field-fixture-hash\"");
+  replaceOnce("\"mediaType\":null", "\"mediaType\":\"application/vnd.latticewake.surface-field-v1\"");
+  constexpr unsigned int edge = 16;
+  std::array<unsigned short, edge * edge> samples{};
+  for (unsigned int y = 0; y < edge; ++y)
+    for (unsigned int x = 0; x < edge; ++x)
+      samples[static_cast<std::size_t>(y) * edge + x] = static_cast<unsigned short>(x * 65535U / (edge - 1U));
+  const LWSurfaceField fields[2]{{samples.data(), edge, edge, "field-fixture-hash"}, {nullptr, 0, 0, ""}};
+  LWKernelRef* const imageKernel = lw_kernel_create();
+  LWKernelRef* const analyticKernel = lw_kernel_create();
+  assert(imageKernel && analyticKernel);
+  assert(lw_kernel_prepare_scene_json_with_fields(imageKernel, imageScene.c_str(), 48000.0, fields) == 1);
+  assert(lw_kernel_prepare_scene_json(analyticKernel, kCanonicalScene, 48000.0) == 1);
+  samples.fill(0); // Prepared plan must own its tables, not retain this host buffer.
+  std::array<float, 512> imageOutput{};
+  std::array<float, 512> analyticOutput{};
+  assert(lw_kernel_note_on(imageKernel, 60, 0.7F) == 1);
+  assert(lw_kernel_note_on(analyticKernel, 60, 0.7F) == 1);
+  assert(lw_kernel_render(imageKernel, imageOutput.data(), static_cast<unsigned int>(imageOutput.size())) == 1);
+  assert(lw_kernel_render(analyticKernel, analyticOutput.data(), static_cast<unsigned int>(analyticOutput.size())) == 1);
+  assert(imageOutput != analyticOutput);
+  double energy = 0;
+  for (const float value : imageOutput) energy += static_cast<double>(value) * value;
+  std::array<float, 512> block{};
+  for (unsigned int index = 0; index < 95; ++index) {
+    assert(lw_kernel_render(imageKernel, block.data(), static_cast<unsigned int>(block.size())) == 1);
+    for (const float value : block) energy += static_cast<double>(value) * value;
+  }
+  assert(std::sqrt(energy / (96.0 * 512.0)) > 0.005);
+  const LWSurfaceField wrongHash[2]{{samples.data(), edge, edge, "different-hash"}, {nullptr, 0, 0, ""}};
+  LWKernelRef* const rejected = lw_kernel_create();
+  assert(rejected);
+  assert(lw_kernel_prepare_scene_json_with_fields(rejected, imageScene.c_str(), 48000.0, wrongHash) == 0);
+  lw_kernel_destroy(rejected);
+  lw_kernel_destroy(imageKernel);
+  lw_kernel_destroy(analyticKernel);
+}
+
 void testMpeBridgeState() {
   LWMpeStateRef* const lower = lw_mpe_state_create(1, 1, 2);
   assert(lower != nullptr);
@@ -432,6 +483,7 @@ int main() {
   testCallbackOwnedPanicRecoversOverload();
   testTerrainFrameSnapshotBoundary();
   testSceneV1BridgeMigrationAndPreparation();
+  testImageSurfaceFieldCAbi();
   testMpeBridgeState();
   testRoleControlCanonicalBoundary();
   testRolePreviewBoundary();

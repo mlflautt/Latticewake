@@ -2,6 +2,7 @@
 
 #include "realtime_kernel.hpp"
 #include "scene_v1.hpp"
+#include "surface_field.hpp"
 
 #include <array>
 #include <cstdint>
@@ -37,6 +38,9 @@ class RenderPlanBuilder {
                            RenderPlanError& error) const;
   [[nodiscard]] bool build(const SceneV1& scene, double sampleRate, RenderPlan& output,
                            RenderPlanError& error) const;
+  [[nodiscard]] bool build(const SceneV1& scene, double sampleRate,
+                           const std::array<SurfaceFieldView, 2>& fields,
+                           RenderPlan& output, RenderPlanError& error) const;
 };
 
 }  // namespace latticewake

@@ -122,21 +122,40 @@ static int prepareInitial(LWKernelRef* kernel,const latticewake::Scene& scene,co
   return 1;
 }
 
-static bool buildSceneDocumentPlan(const char* json, const double rate, latticewake::RenderPlan& output) {
+static bool buildSceneDocumentPlan(const char* json, const double rate, latticewake::RenderPlan& output,
+                                   const std::array<latticewake::SurfaceFieldView, 2>* fields = nullptr) {
   if(!json) return false;
   latticewake::SceneSerializationError parseError;
   latticewake::RenderPlanError renderError;
   latticewake::RenderPlanBuilder builder;
-  if(const auto sceneV1=latticewake::parseSceneV1(json,parseError))
+  if(const auto sceneV1=latticewake::parseSceneV1(json,parseError)) {
+    if (fields) return builder.build(*sceneV1, rate, *fields, output, renderError);
     return builder.build(*sceneV1,rate,output,renderError);
+  }
   if(const auto sceneV0=latticewake::parseSceneV0(json,parseError))
     return builder.build(*sceneV0,rate,output,renderError);
   return false;
 }
 
-static int prepareInitialDocument(LWKernelRef* kernel, const char* json, const double rate) {
+static std::optional<std::array<latticewake::SurfaceFieldView, 2>> surfaceFieldViews(const LWSurfaceField fields[2]) {
+  if (!fields) return std::nullopt;
+  std::array<latticewake::SurfaceFieldView, 2> views{};
+  for (std::size_t index = 0; index < views.size(); ++index) {
+    const auto& field = fields[index];
+    if (!field.samples || !field.content_hash || field.width == 0 || field.height == 0 ||
+        static_cast<std::uint64_t>(field.width) * field.height > latticewake::kSurfaceFieldMaximumSamples)
+      continue;
+    const auto count = static_cast<std::size_t>(field.width) * field.height;
+    views[index] = {field.width, field.height, std::span<const std::uint16_t>(field.samples, count), field.content_hash};
+  }
+  return views;
+}
+
+static int prepareInitialDocument(LWKernelRef* kernel, const char* json, const double rate,
+                                  const LWSurfaceField fields[2] = nullptr) {
+  const auto views = fields ? surfaceFieldViews(fields) : std::nullopt;
   if(!kernel||kernel->renderBegun.load(std::memory_order_acquire)||
-     !buildSceneDocumentPlan(json,rate,kernel->plans[0].plan)||
+     (fields && !views) || !buildSceneDocumentPlan(json,rate,kernel->plans[0].plan, views ? &*views : nullptr)||
      !kernel->plans[0].kernel.activate(kernel->plans[0].plan.terrain)) return 0;
   kernel->plans[0].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   copyRolePlan(kernel->plans[0].plan,kernel->rolePlans[0]);
@@ -169,11 +188,13 @@ static int publishPlan(LWKernelRef* kernel,const latticewake::Scene& scene,const
   kernel->pendingRolePlan.store(candidateRole,std::memory_order_release);
   return 1;
 }
-static int publishDocumentPlan(LWKernelRef* kernel,const char* json,const double rate) {
+static int publishDocumentPlan(LWKernelRef* kernel,const char* json,const double rate,
+                               const LWSurfaceField fields[2] = nullptr) {
+  const auto views = fields ? surfaceFieldViews(fields) : std::nullopt;
   if(!kernel||kernel->pendingPlan.load(std::memory_order_acquire)!=kNoPlan||kernel->pendingRolePlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
   const std::uint32_t active=kernel->activePlan.load(std::memory_order_acquire);
   const std::uint32_t candidate=1U-active;
-  if(!buildSceneDocumentPlan(json,rate,kernel->plans[candidate].plan)||
+  if((fields && !views) || !buildSceneDocumentPlan(json,rate,kernel->plans[candidate].plan, views ? &*views : nullptr)||
      !kernel->plans[candidate].kernel.activate(kernel->plans[candidate].plan.terrain)) return 0;
   kernel->plans[candidate].generation.store(kernel->nextGeneration.fetch_add(1,std::memory_order_relaxed),std::memory_order_release);
   const std::uint32_t activeRole=kernel->activeRolePlan.load(std::memory_order_acquire);
@@ -184,10 +205,12 @@ static int publishDocumentPlan(LWKernelRef* kernel,const char* json,const double
   kernel->pendingRolePlan.store(candidateRole,std::memory_order_release);
   return 1;
 }
-static int publishRoleDocumentPlan(LWKernelRef* kernel,const char* json,const double rate) {
+static int publishRoleDocumentPlan(LWKernelRef* kernel,const char* json,const double rate,
+                                   const LWSurfaceField fields[2] = nullptr) {
   if(!kernel||kernel->pendingRolePlan.load(std::memory_order_acquire)!=kNoPlan)return 0;
   latticewake::RenderPlan candidatePlan;
-  if(!buildSceneDocumentPlan(json,rate,candidatePlan))return 0;
+  const auto views = fields ? surfaceFieldViews(fields) : std::nullopt;
+  if((fields && !views) || !buildSceneDocumentPlan(json,rate,candidatePlan, views ? &*views : nullptr))return 0;
   const std::uint32_t active=kernel->activeRolePlan.load(std::memory_order_acquire);
   const std::uint32_t candidate=1U-active;
   copyRolePlan(candidatePlan,kernel->rolePlans[candidate]);
@@ -197,9 +220,12 @@ static int publishRoleDocumentPlan(LWKernelRef* kernel,const char* json,const do
 }
 int lw_kernel_prepare_demo(LWKernelRef* kernel,double rate) { return prepareInitial(kernel,demoScene(),rate); }
 int lw_kernel_prepare_scene_json(LWKernelRef* kernel,const char* json,double rate) { return prepareInitialDocument(kernel,json,rate); }
+int lw_kernel_prepare_scene_json_with_fields(LWKernelRef* kernel,const char* json,double rate,const LWSurfaceField fields[2]) { return prepareInitialDocument(kernel,json,rate,fields); }
 int lw_kernel_publish_demo(LWKernelRef* kernel,double rate) { return publishPlan(kernel,demoScene(),rate); }
 int lw_kernel_publish_scene_json(LWKernelRef* kernel,const char* json,double rate) { return publishDocumentPlan(kernel,json,rate); }
+int lw_kernel_publish_scene_json_with_fields(LWKernelRef* kernel,const char* json,double rate,const LWSurfaceField fields[2]) { return publishDocumentPlan(kernel,json,rate,fields); }
 int lw_kernel_publish_role_scene_json(LWKernelRef* kernel,const char* json,double rate) { return publishRoleDocumentPlan(kernel,json,rate); }
+int lw_kernel_publish_role_scene_json_with_fields(LWKernelRef* kernel,const char* json,double rate,const LWSurfaceField fields[2]) { return publishRoleDocumentPlan(kernel,json,rate,fields); }
 int lw_terrain_frame_scene_json(const char* json,const unsigned long long sampleOffset,const double startPhase,const double phaseStep,LWTerrainFramePoint* points,const unsigned int capacity,unsigned int* pointCount) {
   if(!json||!points||!pointCount||capacity==0)return 0;
   latticewake::SceneSerializationError parseError;

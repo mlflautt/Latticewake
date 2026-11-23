@@ -6,8 +6,11 @@ import LatticewakeBridge
 @_silgen_name("lw_kernel_destroy") private func lw_kernel_destroy(_ kernel: OpaquePointer)
 @_silgen_name("lw_kernel_prepare_demo") private func lw_kernel_prepare_demo(_ kernel: OpaquePointer, _ rate: Double) -> Int32
 @_silgen_name("lw_kernel_prepare_scene_json") private func lw_kernel_prepare_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
+@_silgen_name("lw_kernel_prepare_scene_json_with_fields") private func lw_kernel_prepare_scene_json_with_fields(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double, _ fields: UnsafePointer<LWSurfaceField>) -> Int32
 @_silgen_name("lw_kernel_publish_scene_json") private func lw_kernel_publish_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
+@_silgen_name("lw_kernel_publish_scene_json_with_fields") private func lw_kernel_publish_scene_json_with_fields(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double, _ fields: UnsafePointer<LWSurfaceField>) -> Int32
 @_silgen_name("lw_kernel_publish_role_scene_json") private func lw_kernel_publish_role_scene_json(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double) -> Int32
+@_silgen_name("lw_kernel_publish_role_scene_json_with_fields") private func lw_kernel_publish_role_scene_json_with_fields(_ kernel: OpaquePointer, _ json: UnsafePointer<CChar>, _ rate: Double, _ fields: UnsafePointer<LWSurfaceField>) -> Int32
 @_silgen_name("lw_kernel_note_on") private func lw_kernel_note_on(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float) -> Int32
 @_silgen_name("lw_kernel_note_on_source") private func lw_kernel_note_on_source(_ kernel: OpaquePointer, _ note: Int32, _ velocity: Float, _ source: UInt32) -> Int32
 @_silgen_name("lw_kernel_expression") private func lw_kernel_expression(_ kernel: OpaquePointer, _ glide: Float, _ press: Float, _ slide: Float) -> Int32
@@ -129,12 +132,17 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   private var kernel: OpaquePointer?
   private var sourceNode: AVAudioSourceNode?
   private var sceneJSON = DemoScene.canonicalJSON
+  private var surfaceAssets: [String: ImageTerrainAsset] = [:]
+
+  func registerSurfaceAssets(_ assets: [String: ImageTerrainAsset]) {
+    surfaceAssets = assets
+  }
 
   func setScene(bytes: Data) throws {
     guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
     if running, let kernel {
       let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
-      guard text.withCString({ lw_kernel_publish_scene_json(kernel, $0, sampleRate) }) != 0 else {
+      guard prepareOrPublish(text, kernel: kernel, rate: sampleRate, publish: true) else {
         throw NSError(domain: "Latticewake", code: 4, userInfo: [NSLocalizedDescriptionKey: "Scene change is pending or could not be prepared"])
       }
       roleChangesPending = true
@@ -146,7 +154,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
     guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
     guard running, let kernel else { sceneJSON = text; roleChangesPending = false; return }
     let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
-    guard text.withCString({ lw_kernel_publish_role_scene_json(kernel, $0, sampleRate) }) != 0 else {
+    guard publishRoleScene(text, kernel: kernel, rate: sampleRate) else {
       throw NSError(domain: "Latticewake", code: 5, userInfo: [NSLocalizedDescriptionKey: "A role change is already queued for the next loop boundary"])
     }
     sceneJSON = text
@@ -157,8 +165,10 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
     guard !running else { return }
     let format = engine.mainMixerNode.outputFormat(forBus: 0)
     guard let created = lw_kernel_create() else { throw NSError(domain: "Latticewake", code: 1) }
-    let prepared = sceneJSON.withCString { lw_kernel_prepare_scene_json(created, $0, format.sampleRate) }
-    guard prepared != 0 else { lw_kernel_destroy(created); throw NSError(domain: "Latticewake", code: 2) }
+    guard prepareOrPublish(sceneJSON, kernel: created, rate: format.sampleRate, publish: false) else {
+      lw_kernel_destroy(created); throw NSError(domain: "Latticewake", code: 2,
+        userInfo: [NSLocalizedDescriptionKey: "Scene preparation failed. Check that every image Surface asset is embedded and valid."])
+    }
     let node = makeCallbackSourceNode(CallbackRenderState(kernel: created))
     kernel = created
     sourceNode = node
@@ -228,4 +238,75 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   func startRoles() { if let kernel { lw_kernel_set_roles_running(kernel, 1); rolesRunning = true } }
   func stopRoles() { if let kernel { lw_kernel_set_roles_running(kernel, 0); rolesRunning = false } }
   func expression(glide: Double, press: Double, slide: Double) { if let kernel { _ = lw_kernel_expression(kernel, Float(glide), Float(press), Float(slide)) } }
+
+  private func prepareOrPublish(_ json: String, kernel: OpaquePointer, rate: Double, publish: Bool) -> Bool {
+    guard let root = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else { return false }
+    guard let surface = root["surface"] as? [String: Any],
+          let layers = surface["layers"] as? [[String: Any]], layers.count == 2 else {
+      return json.withCString { text in
+        publish ? lw_kernel_publish_scene_json(kernel, text, rate) : lw_kernel_prepare_scene_json(kernel, text, rate)
+      } != 0
+    }
+    var hashes: [String?] = []
+    for layer in layers {
+      hashes.append((layer["sourceType"] as? String) == "image" ? layer["assetHash"] as? String : nil)
+    }
+    guard hashes.allSatisfy({ $0 == nil || surfaceAssets[$0!] != nil }) else { return false }
+    let sampleArrays = hashes.map { hash -> [UInt16]? in
+      guard let hash, let asset = surfaceAssets[hash] else { return nil }
+      return try? asset.samples()
+    }
+    guard zip(hashes, sampleArrays).allSatisfy({ pair in pair.0 == nil || pair.1 != nil }) else { return false }
+    if hashes.allSatisfy({ $0 == nil }) {
+      return json.withCString { text in
+        publish ? lw_kernel_publish_scene_json(kernel, text, rate) : lw_kernel_prepare_scene_json(kernel, text, rate)
+      } != 0
+    }
+    return withFieldPointer(sampleArrays, hashes: hashes) { fields in
+      json.withCString { text in
+        publish ? lw_kernel_publish_scene_json_with_fields(kernel, text, rate, fields)
+                : lw_kernel_prepare_scene_json_with_fields(kernel, text, rate, fields)
+      } != 0
+    }
+  }
+
+  private func publishRoleScene(_ json: String, kernel: OpaquePointer, rate: Double) -> Bool {
+    guard let root = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+          let surface = root["surface"] as? [String: Any],
+          let layers = surface["layers"] as? [[String: Any]], layers.count == 2 else {
+      return json.withCString { lw_kernel_publish_role_scene_json(kernel, $0, rate) } != 0
+    }
+    let hashes = layers.map { ($0["sourceType"] as? String) == "image" ? $0["assetHash"] as? String : nil }
+    guard hashes.allSatisfy({ $0 == nil || surfaceAssets[$0!] != nil }) else { return false }
+    let sampleArrays = hashes.map { hash -> [UInt16]? in
+      guard let hash, let asset = surfaceAssets[hash] else { return nil }
+      return try? asset.samples()
+    }
+    guard zip(hashes, sampleArrays).allSatisfy({ pair in pair.0 == nil || pair.1 != nil }) else { return false }
+    return withFieldPointer(sampleArrays, hashes: hashes) { fields in
+      json.withCString { lw_kernel_publish_role_scene_json_with_fields(kernel, $0, rate, fields) } != 0
+    }
+  }
+
+  private func withFieldPointer<T>(_ sampleArrays: [[UInt16]?], hashes: [String?], body: (UnsafePointer<LWSurfaceField>) -> T) -> T {
+    let a = sampleArrays[0] ?? []
+    let b = sampleArrays[1] ?? []
+    let hashA = hashes[0] ?? ""
+    let hashB = hashes[1] ?? ""
+    return a.withUnsafeBufferPointer { bufferA in
+      b.withUnsafeBufferPointer { bufferB in
+        hashA.withCString { hashPointerA in
+          hashB.withCString { hashPointerB in
+            let fields = [
+              LWSurfaceField(samples: bufferA.baseAddress, width: UInt32(surfaceAssets[hashA]?.width ?? 0),
+                             height: UInt32(surfaceAssets[hashA]?.height ?? 0), content_hash: hashPointerA),
+              LWSurfaceField(samples: bufferB.baseAddress, width: UInt32(surfaceAssets[hashB]?.width ?? 0),
+                             height: UInt32(surfaceAssets[hashB]?.height ?? 0), content_hash: hashPointerB)
+            ]
+            return fields.withUnsafeBufferPointer { pointer in body(pointer.baseAddress!) }
+          }
+        }
+      }
+    }
+  }
 }

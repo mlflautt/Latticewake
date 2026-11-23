@@ -23,7 +23,12 @@ unknown, missing, duplicate, malformed, or over-cap fields.
 
 Component identifiers and route identifiers are non-empty and unique across a
 document. Image and audio analysis is not part of Cycle 033; its descriptors
-are reserved without permitting callback file access.
+were originally reserved without permitting callback file access. Cycle 060
+adds image field assets to the Scene Library v1 envelope, not to Scene JSON.
+An image layer's `assetHash` identifies the canonical `LWSF` field bytes, and
+the library envelope embeds that verified asset and its source preview. Scene
+v0 bytes and old Library v1 documents without this optional asset map remain
+readable and unchanged until explicitly saved.
 
 ## Compatibility witness
 

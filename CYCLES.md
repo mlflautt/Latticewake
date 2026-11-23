@@ -15,6 +15,16 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 060 — image-derived terrain Surface
+
+- Commit: pending.
+- Scope: bounded luminance import, deterministic project-owned scalar-field
+  assets, preview/accept flow, and image-backed `RenderPlanBuilder` preparation.
+- Evidence: normal and ASan/UBSan suites, Swift import/library/undo tests,
+  signed standalone bundle and bundle verification; see `handoffs/cycle-060.md`.
+- Non-goals: audio-derived import, additional image providers, human listening
+  approval, target-device audition, and callback admission claims.
+
 ### Cycle 001 — kernel contracts
 
 - Commit: recorded after this document is committed.

@@ -5,6 +5,12 @@ extern "C" {
 const char* latticewake_core_version(void);
 typedef struct LWKernelRef LWKernelRef;
 typedef struct LWMpeStateRef LWMpeStateRef;
+typedef struct LWSurfaceField {
+  const unsigned short* samples;
+  unsigned int width;
+  unsigned int height;
+  const char* content_hash;
+} LWSurfaceField;
 float lw_kernel_output_peak(const LWKernelRef* kernel);
 typedef struct LWKernelStatus {
   unsigned int pending_events;
@@ -90,9 +96,15 @@ LWKernelRef* lw_kernel_create(void);
 void lw_kernel_destroy(LWKernelRef* kernel);
 int lw_kernel_prepare_demo(LWKernelRef* kernel, double sample_rate);
 int lw_kernel_prepare_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
+int lw_kernel_prepare_scene_json_with_fields(LWKernelRef* kernel, const char* json,
+                                             double sample_rate, const LWSurfaceField fields[2]);
 int lw_kernel_publish_demo(LWKernelRef* kernel, double sample_rate);
 int lw_kernel_publish_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
+int lw_kernel_publish_scene_json_with_fields(LWKernelRef* kernel, const char* json,
+                                             double sample_rate, const LWSurfaceField fields[2]);
 int lw_kernel_publish_role_scene_json(LWKernelRef* kernel, const char* json, double sample_rate);
+int lw_kernel_publish_role_scene_json_with_fields(LWKernelRef* kernel, const char* json,
+                                                  double sample_rate, const LWSurfaceField fields[2]);
 int lw_terrain_frame_scene_json(const char* json, unsigned long long sample_offset,
                                 double start_phase, double phase_step,
                                 LWTerrainFramePoint* points, unsigned int capacity,
