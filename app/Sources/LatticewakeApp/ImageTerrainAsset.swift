@@ -4,7 +4,7 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-enum ImageTerrainAssetError: LocalizedError {
+enum ImageTerrainAssetError: LocalizedError, Equatable {
   case unreadableImage
   case tooLarge
   case invalidField
@@ -25,6 +25,7 @@ struct ImageTerrainAsset: Codable, Equatable, Identifiable, Sendable {
   static let schema = "latticewake-image-terrain-v1"
   static let provider = "luminance-srgb-center-crop-v1"
   static let edge = 256
+  static let maximumSourceBytes = 64 * 1024 * 1024
 
   let schemaVersion: String
   let id: String
@@ -83,26 +84,46 @@ struct ImageTerrainAsset: Codable, Equatable, Identifiable, Sendable {
     for level in levels {
       for y in 0..<(h - 1) {
         for x in 0..<(w - 1) where result.count < maximum {
-          let values = [decoded.samples[y * w + x], decoded.samples[y * w + x + 1],
-                        decoded.samples[(y + 1) * w + x + 1], decoded.samples[(y + 1) * w + x]]
-          let corners = [CGPoint(x: Double(x), y: Double(y)), CGPoint(x: Double(x + 1), y: Double(y)),
-                         CGPoint(x: Double(x + 1), y: Double(y + 1)), CGPoint(x: Double(x), y: Double(y + 1))]
-          var hits: [CGPoint] = []
-          for edge in 0..<4 {
-            let next = (edge + 1) % 4
-            let a = values[edge]
-            let b = values[next]
-            guard (a < level && b >= level) || (a >= level && b < level) else { continue }
+          let v0 = decoded.samples[y * w + x]
+          let v1 = decoded.samples[y * w + x + 1]
+          let v2 = decoded.samples[(y + 1) * w + x + 1]
+          let v3 = decoded.samples[(y + 1) * w + x]
+          var first = CGPoint.zero
+          var second = CGPoint.zero
+          var third = CGPoint.zero
+          var fourth = CGPoint.zero
+          var hitCount = 0
+          func addCrossing(_ a: UInt16, _ b: UInt16, edge: Int) {
+            guard (a < level && b >= level) || (a >= level && b < level) else { return }
             let fraction = Double(Int(level) - Int(a)) / Double(Int(b) - Int(a))
-            let p = corners[edge]
-            let q = corners[next]
-            hits.append(CGPoint(x: (p.x + (q.x - p.x) * fraction) / Double(w - 1),
-                                y: (p.y + (q.y - p.y) * fraction) / Double(h - 1)))
+            let point: CGPoint
+            switch edge {
+            case 0:
+              point = CGPoint(x: Double(x) + fraction, y: Double(y))
+            case 1:
+              point = CGPoint(x: Double(x + 1), y: Double(y) + fraction)
+            case 2:
+              point = CGPoint(x: Double(x + 1) - fraction, y: Double(y + 1))
+            default:
+              point = CGPoint(x: Double(x), y: Double(y + 1) - fraction)
+            }
+            let normalized = CGPoint(x: point.x / Double(w - 1), y: point.y / Double(h - 1))
+            switch hitCount {
+            case 0: first = normalized
+            case 1: second = normalized
+            case 2: third = normalized
+            default: fourth = normalized
+            }
+            hitCount += 1
           }
-          if hits.count >= 2 {
-            result.append(TerrainContourSegment(start: hits[0], end: hits[1]))
-            if hits.count == 4 && result.count < maximum {
-              result.append(TerrainContourSegment(start: hits[2], end: hits[3]))
+          addCrossing(v0, v1, edge: 0)
+          addCrossing(v1, v2, edge: 1)
+          addCrossing(v2, v3, edge: 2)
+          addCrossing(v3, v0, edge: 3)
+          if hitCount >= 2 {
+            result.append(TerrainContourSegment(start: first, end: second))
+            if hitCount == 4 && result.count < maximum {
+              result.append(TerrainContourSegment(start: third, end: fourth))
             }
           }
         }
@@ -113,8 +134,11 @@ struct ImageTerrainAsset: Codable, Equatable, Identifiable, Sendable {
     return result
   }
 
-  func sampledPathVariation(_ path: [CGPoint]) -> Double {
+  func sampledPathVariation(_ path: [CGPoint], morphing other: ImageTerrainAsset? = nil,
+                           amount: Double = 0) -> Double {
     guard let decoded = try? Self.decodeField(fieldBytes), !path.isEmpty else { return 0 }
+    let otherField = other.flatMap { try? Self.decodeField($0.fieldBytes) }
+    let blend = min(1, max(0, amount))
     let w = decoded.width
     let h = decoded.height
     var minimum = 1.0
@@ -130,17 +154,39 @@ struct ImageTerrainAsset: Codable, Equatable, Identifiable, Sendable {
       }
       let top = height(x0, y0) + (height(x1, y0) - height(x0, y0)) * tx
       let bottom = height(x0, y1) + (height(x1, y1) - height(x0, y1)) * tx
-      let value = top + (bottom - top) * ty
+      let firstValue = top + (bottom - top) * ty
+      var value = firstValue
+      if let otherField {
+        let secondValue = Self.sample(otherField.samples, width: otherField.width,
+                                      height: otherField.height, at: point)
+        value = firstValue * (1 - blend) + secondValue * blend
+      }
       minimum = min(minimum, value); maximum = max(maximum, value)
     }
     return maximum - minimum
   }
 
+  private static func sample(_ samples: [UInt16], width: Int, height: Int, at point: CGPoint) -> Double {
+    let px = min(1, max(0, (point.x + 1) * 0.5)) * Double(width - 1)
+    let py = min(1, max(0, (1 - point.y) * 0.5)) * Double(height - 1)
+    let x0 = Int(px), y0 = Int(py), x1 = min(Int(px) + 1, width - 1), y1 = min(Int(py) + 1, height - 1)
+    let tx = px - Double(x0), ty = py - Double(y0)
+    func sampleHeight(_ x: Int, _ y: Int) -> Double { Double(samples[y * width + x]) / 65535 }
+    let top = sampleHeight(x0, y0) + (sampleHeight(x1, y0) - sampleHeight(x0, y0)) * tx
+    let bottom = sampleHeight(x0, y1) + (sampleHeight(x1, y1) - sampleHeight(x0, y1)) * tx
+    return top + (bottom - top) * ty
+  }
+
   static func importImage(at url: URL) throws -> ImageTerrainAsset {
+    let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
+    guard values.isRegularFile == true, let fileSize = values.fileSize else {
+      throw ImageTerrainAssetError.unreadableImage
+    }
+    try validateSourceByteCount(fileSize)
     let sourceData = try Data(contentsOf: url, options: [.mappedIfSafe])
+    try validateSourceByteCount(sourceData.count)
     let sourceHash = hash(sourceData)
-    guard sourceData.count <= 64 * 1024 * 1024,
-          let source = CGImageSourceCreateWithURL(url as CFURL, nil),
+    guard let source = CGImageSourceCreateWithData(sourceData as CFData, nil),
           let properties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) as? [CFString: Any],
           let sourceWidth = properties[kCGImagePropertyPixelWidth] as? Int,
           let sourceHeight = properties[kCGImagePropertyPixelHeight] as? Int else {
@@ -202,6 +248,11 @@ struct ImageTerrainAsset: Codable, Equatable, Identifiable, Sendable {
     guard CGImageDestinationFinalize(destination) else { throw ImageTerrainAssetError.unreadableImage }
     return try ImageTerrainAsset(sourceSHA256: sourceHash, sourceName: url.lastPathComponent,
                                  fieldBytes: field, sourcePreviewPNG: preview as Data)
+  }
+
+  static func validateSourceByteCount(_ count: Int) throws {
+    guard count >= 0 else { throw ImageTerrainAssetError.unreadableImage }
+    guard count <= maximumSourceBytes else { throw ImageTerrainAssetError.tooLarge }
   }
 
   static func decodeField(_ data: Data) throws -> (width: Int, height: Int, samples: [UInt16]) {

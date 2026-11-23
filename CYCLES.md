@@ -15,6 +15,16 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 061 — continuous Surface morph and safe image preflight
+
+- Commit: recorded in `handoffs/cycle-061.md` after the release commit.
+- Scope: make imported source/interpretation layers follow Scene A/B morph and
+  reject oversized image inputs before reading or decoding.
+- Evidence: Swift regression suite and full release checks; see
+  `handoffs/cycle-061.md`.
+- Non-goals: additional image providers, audio import, or target-device and
+  human listening claims.
+
 ### Cycle 060 — image-derived terrain Surface
 
 - Commit: pending.

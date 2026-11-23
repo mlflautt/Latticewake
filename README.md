@@ -51,6 +51,9 @@ idle-cost admission check. Scene v1 now supports bounded image-derived terrain
 fields through an offline luminance importer, Layer A/B preview and acceptance,
 embedded library assets, and RenderPlanBuilder preparation. See the
 [media-terrain interface boundary](docs/MEDIA_TERRAIN_INTERFACE.md).
+The source plane now crossfades both image layers at the actual Scene morph
+value, with contours following each layer's contribution. Import checks the
+file-size cap before reading and hashes and decodes the same byte snapshot.
 The supplied image-ingest and macOS Stage reports, with design decisions and
 unverified claims separated, are indexed in the
 [image-terrain research synthesis](research/IMAGE_TERRAIN_REPORT_SYNTHESIS.md).

@@ -46,6 +46,7 @@ struct TerrainSurfacePresentation: Equatable {
 
   var primaryLayer: TerrainSurfaceLayerPresentation { layers.first ?? Self.analyticDefault.layers[0] }
   var visualLayer: TerrainSurfaceLayerPresentation { layers[morph < 0.5 ? 0 : 1] }
+  var layerWeights: [Double] { [1 - morph, morph] }
 
   var sourceSummary: String {
     let a = layers.first?.kind.label ?? "Unknown"
@@ -81,26 +82,24 @@ struct TerrainSurfacePresentation: Equatable {
   }
 }
 
-/// UI-only resolved media. Asset decoding and terrain analysis remain offline;
-/// the audio callback sees only prepared tables in its immutable RenderPlan.
-struct TerrainSurfaceMedia: Equatable {
-  let assetID: String
-  let image: NSImage
+/// UI-only layer media. Both registered Surface layers are retained so the
+/// source plane follows the same continuous morph as the prepared audio tables.
+struct TerrainSurfaceLayerMedia: Identifiable, Equatable {
+  let id: String
+  let kind: TerrainSourceKind
+  let weight: Double
+  let image: NSImage?
   let interpretation: NSImage?
   let contours: [TerrainContourSegment]
-  let sampledPathVariation: Double
 
-  init(assetID: String, image: NSImage, interpretation: NSImage? = nil,
-       contours: [TerrainContourSegment] = [], sampledPathVariation: Double = 0) {
-    self.assetID = assetID
-    self.image = image
-    self.interpretation = interpretation
-    self.contours = contours
-    self.sampledPathVariation = sampledPathVariation
+  static func == (lhs: TerrainSurfaceLayerMedia, rhs: TerrainSurfaceLayerMedia) -> Bool {
+    lhs.id == rhs.id && lhs.kind == rhs.kind && lhs.weight == rhs.weight &&
+      lhs.image === rhs.image && lhs.interpretation === rhs.interpretation && lhs.contours == rhs.contours
   }
+}
 
-  static func == (lhs: TerrainSurfaceMedia, rhs: TerrainSurfaceMedia) -> Bool {
-    lhs.assetID == rhs.assetID && lhs.image === rhs.image && lhs.contours == rhs.contours &&
-      lhs.sampledPathVariation == rhs.sampledPathVariation
-  }
+/// Asset visualization and diagnostics are resolved off the audio callback.
+struct TerrainSurfaceMedia: Equatable {
+  let layers: [TerrainSurfaceLayerMedia]
+  let sampledPathVariation: Double?
 }

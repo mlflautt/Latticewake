@@ -346,15 +346,37 @@ struct ContentView: View {
 
   private func makeSurfaceMedia(presentation: TerrainSurfacePresentation,
                                 assets: [String: ImageTerrainAsset]) -> TerrainSurfaceMedia? {
-    let layer = presentation.visualLayer
-    guard layer.kind == .image, let hash = layer.assetHash,
-          let asset = assets[hash], let image = asset.previewImage else { return nil }
-    return TerrainSurfaceMedia(assetID: layer.assetID ?? hash, image: image,
-                               interpretation: asset.interpretationImage,
-                               contours: asset.contourSegments(),
-                               sampledPathVariation: asset.sampledPathVariation(terrain.snapshot.points.map {
-                                 CGPoint(x: $0.x, y: $0.y)
-                               }))
+    let layerMedia = presentation.layers.enumerated().map { index, layer in
+      let asset = layer.assetHash.flatMap { assets[$0] }
+      return TerrainSurfaceLayerMedia(
+        id: layer.assetID ?? layer.assetHash ?? layer.id,
+        kind: layer.kind,
+        weight: presentation.layerWeights[index],
+        image: asset?.previewImage,
+        interpretation: asset?.interpretationImage,
+        contours: asset?.contourSegments() ?? []
+      )
+    }
+    let imageAssets = presentation.layers.map { layer in layer.assetHash.flatMap { assets[$0] } }
+    let path = terrain.snapshot.points.map { CGPoint(x: $0.x, y: $0.y) }
+    let variation: Double?
+    if presentation.layers.allSatisfy({ $0.kind == .image }) {
+      if let first = imageAssets[0], let second = imageAssets[1] {
+        variation = first.sampledPathVariation(path, morphing: second, amount: presentation.morph)
+      } else {
+        variation = nil
+      }
+    } else if presentation.morph <= 0.000001, presentation.layers[0].kind == .image,
+              let first = imageAssets[0] {
+      variation = first.sampledPathVariation(path)
+    } else if presentation.morph >= 0.999999, presentation.layers[1].kind == .image,
+              let second = imageAssets[1] {
+      variation = second.sampledPathVariation(path)
+    } else {
+      // A mixed image/analytic morph needs both prepared surfaces' diagnostics.
+      variation = nil
+    }
+    return TerrainSurfaceMedia(layers: layerMedia, sampledPathVariation: variation)
   }
 
   @ViewBuilder private var imageSurfaceControls: some View {
@@ -458,8 +480,9 @@ struct ContentView: View {
   }
 
   private var terrainIsFlat: Bool {
-    if surfacePresentation.visualLayer.kind == .image {
-      return (activeSurfaceMedia?.sampledPathVariation ?? 0) < 0.000001
+    if surfacePresentation.layers.contains(where: { $0.kind == .image }) {
+      guard let variation = activeSurfaceMedia?.sampledPathVariation else { return false }
+      return variation < 0.000001
     }
     guard !terrain.snapshot.points.isEmpty else { return false }
     return (terrain.snapshot.points.map(\.value).max() ?? 0) -

@@ -176,47 +176,48 @@ struct TerrainContourSurface: View {
   }
 
   @ViewBuilder private var sourcePlane: some View {
-    if source.visualLayer.kind == .image, let media,
-       media.assetID == source.visualLayer.assetID {
-      Image(nsImage: media.image)
-        .resizable().saturation(0.62).contrast(1.08)
-        .overlay(Color(red: 0.01, green: 0.04, blue: 0.08).opacity(0.42))
-        .overlay {
-          if let interpretation = media.interpretation {
-            Image(nsImage: interpretation).resizable()
-              .blendMode(.screen).opacity(0.28)
+    ZStack {
+      Color(red: 0.015, green: 0.027, blue: 0.060)
+      RadialGradient(colors: [LatticewakeDesign.cyan.opacity(0.08), .clear],
+                     center: .center, startRadius: 10, endRadius: 280)
+      if let media {
+        ForEach(media.layers.filter { $0.kind == .image && $0.weight > 0.001 }) { layer in
+          if let image = layer.image {
+            Image(nsImage: image)
+              .resizable().saturation(0.62).contrast(1.08)
+              .overlay(Color(red: 0.01, green: 0.04, blue: 0.08).opacity(0.42))
+              .overlay {
+                if let interpretation = layer.interpretation {
+                  Image(nsImage: interpretation).resizable()
+                    .blendMode(.screen).opacity(0.28)
+                }
+              }
+              .opacity(layer.weight)
           }
         }
-        .clipped()
-    } else if source.visualLayer.kind == .image {
-      ZStack {
-        LinearGradient(colors: [Color(red: 0.035, green: 0.055, blue: 0.09),
-                                Color(red: 0.012, green: 0.026, blue: 0.052)],
-                       startPoint: .topLeading, endPoint: .bottomTrailing)
-        VStack(spacing: 5) {
-          Image(systemName: "photo.badge.exclamationmark").font(.title2)
-          Text(source.visualLayer.displayName).font(.caption)
-          Text("Image source is referenced but not resolved on this Mac")
-            .font(.caption2).foregroundStyle(.secondary)
+        if media.layers.contains(where: { $0.kind == .image && $0.weight > 0.001 && $0.image == nil }) {
+          VStack(spacing: 5) {
+            Image(systemName: "photo.badge.exclamationmark").font(.title2)
+            Text("Image Surface unavailable").font(.caption)
+            Text("The embedded field is missing or unresolved")
+              .font(.caption2).foregroundStyle(.secondary)
+          }
         }
       }
-    } else {
-      ZStack {
-        Color(red: 0.015, green: 0.027, blue: 0.060)
-        RadialGradient(colors: [LatticewakeDesign.cyan.opacity(0.08), .clear],
-                       center: .center, startRadius: 10, endRadius: 280)
-      }
     }
+    .clipped()
   }
 
   private func drawContours(context: GraphicsContext, size: CGSize) {
-    if source.visualLayer.kind == .image, let media, media.assetID == source.visualLayer.assetID {
-      var imageContours = Path()
-      for segment in media.contours {
-        imageContours.move(to: CGPoint(x: segment.start.x * size.width, y: segment.start.y * size.height))
-        imageContours.addLine(to: CGPoint(x: segment.end.x * size.width, y: segment.end.y * size.height))
+    if let media, media.layers.contains(where: { $0.kind == .image }) {
+      for layer in media.layers where layer.kind == .image && layer.weight > 0.001 {
+        var imageContours = Path()
+        for segment in layer.contours {
+          imageContours.move(to: CGPoint(x: segment.start.x * size.width, y: segment.start.y * size.height))
+          imageContours.addLine(to: CGPoint(x: segment.end.x * size.width, y: segment.end.y * size.height))
+        }
+        context.stroke(imageContours, with: .color(.cyan.opacity(0.62 * layer.weight)), lineWidth: 0.8)
       }
-      context.stroke(imageContours, with: .color(.cyan.opacity(0.62)), lineWidth: 0.8)
       return
     }
     var grid = Path()

@@ -113,3 +113,12 @@ OS image decoders will produce identical import bytes. The field hash binds the
 actual imported result, and provider version plus source hash preserve its
 provenance. Audio-derived import, multiple image providers, seam correction,
 phase alignment choices, and broader portability/export policy remain open.
+
+Cycle 061 aligns the source-plane display with Scene morph: both resolved image
+layers remain registered and their source, interpretation, and contour overlays
+fade with the same A/B weights used by the prepared audio tables. Image/analytic
+morphs show the image contribution fading against the analytic terrain view.
+The flat-path warning is shown only when the active imported-field variation is
+known; a mixed image/analytic blend is not misreported from one layer alone.
+Import now checks the regular-file size before reading, then hashes and decodes
+the same bounded byte snapshot to keep provenance tied to the analyzed media.

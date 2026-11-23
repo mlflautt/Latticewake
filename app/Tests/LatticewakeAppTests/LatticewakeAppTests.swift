@@ -271,6 +271,36 @@ final class LatticewakeAppTests: XCTestCase {
       }
   }
 
+  func testImageSourceByteLimitIsCheckedBeforeReading() throws {
+    try ImageTerrainAsset.validateSourceByteCount(ImageTerrainAsset.maximumSourceBytes)
+    XCTAssertThrowsError(try ImageTerrainAsset.validateSourceByteCount(ImageTerrainAsset.maximumSourceBytes + 1)) { error in
+      XCTAssertEqual(error as? ImageTerrainAssetError, .tooLarge)
+    }
+    XCTAssertThrowsError(try ImageTerrainAsset.validateSourceByteCount(-1)) { error in
+      XCTAssertEqual(error as? ImageTerrainAssetError, .unreadableImage)
+    }
+  }
+
+  func testImageFieldMorphDiagnosticsMatchContinuousSurfaceMorph() throws {
+    func field(left: UInt16, right: UInt16) throws -> ImageTerrainAsset {
+      var data = Data([0x4c, 0x57, 0x53, 0x46, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02])
+      for value in [left, right, left, right] {
+        var bigEndian = value.bigEndian
+        withUnsafeBytes(of: &bigEndian) { data.append(contentsOf: $0) }
+      }
+      return try ImageTerrainAsset(sourceSHA256: String(repeating: "c", count: 64), fieldBytes: data,
+                                   sourcePreviewPNG: Data())
+    }
+    let rising = try field(left: 0, right: UInt16.max)
+    let falling = try field(left: UInt16.max, right: 0)
+    let path = [CGPoint(x: -1, y: 0), CGPoint(x: 1, y: 0)]
+    XCTAssertGreaterThan(rising.sampledPathVariation(path), 0.99)
+    XCTAssertLessThan(rising.sampledPathVariation(path, morphing: falling, amount: 0.5), 0.001)
+    XCTAssertGreaterThan(rising.sampledPathVariation(path, morphing: falling, amount: 1), 0.99)
+    XCTAssertEqual(rising.contourSegments(maximum: 1).count, 1)
+    XCTAssertEqual(TerrainSurfacePresentation.analyticDefault.layerWeights, [1, 0])
+  }
+
   func testImageImportCreatesDeterministicBoundedFieldAndRegisteredPreview() throws {
     let width = 8
     let height = 4
@@ -650,6 +680,7 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertEqual(presentation.primaryLayer.displayName, "fractal-coast.png")
     XCTAssertEqual(presentation.primaryLayer.mediaType, "image/png")
     XCTAssertEqual(presentation.morph, 0.25)
+    XCTAssertEqual(presentation.layerWeights, [0.75, 0.25])
     XCTAssertEqual(presentation.sourceSummary, "Image A ↔ Analytic B • 25%")
   }
 }
