@@ -32,6 +32,19 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(GestureState.normalized(-20,length: 200), 0)
 }
 
+  @MainActor func testStageGesturePublishesOwnedPointerAndShapedNotes() {
+    let input = PerformanceInputMultiplexer()
+    input.gestureChanged(location: CGPoint(x: 80, y: 25), size: CGSize(width: 160, height: 100), pointerNote: 48)
+    XCTAssertTrue(input.pointerGestureActive)
+    XCTAssertEqual(input.pointerPosition, CGPoint(x: 80, y: 25))
+    XCTAssertEqual(input.pointerNote, 48)
+    XCTAssertEqual(input.shapingNotes, [48])
+    input.endGesture()
+    XCTAssertFalse(input.pointerGestureActive)
+    XCTAssertTrue(input.shapingNotes.isEmpty)
+    XCTAssertNil(input.pointerPosition)
+  }
+
   func testAudioCallbackRunsOnBackgroundThread() async throws {
   let sceneBytes = try DemoScene.signatureStarters[4].sceneBytes()
   let sceneJSON = String(decoding: sceneBytes, as: UTF8.self)

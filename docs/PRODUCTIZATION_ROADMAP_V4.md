@@ -245,7 +245,9 @@ sound, and the Stage explains the voice without text instructions.
 - Add focus, hover, drag, multi-note shaping, resize, focus-loss, and gesture
   release behavior with visible ownership.
 - Add a short dismissible first-play overlay and contextual tooltips rather
-  than permanent instruction paragraphs.
+  than permanent instruction paragraphs. Cycle 059 lands the overlay and
+  explicit live pointer/note ownership; broader snapshot-cost and system-scale
+  measurements remain open for follow-up.
 - Cap visual refresh independently of audio and drop stale frames.
 
 **Acceptance:** Stage input-to-feedback latency and snapshot cost meet measured

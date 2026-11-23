@@ -45,6 +45,7 @@ struct ContentView: View {
   @State private var workspace: StageWorkspace = .perform
   @State private var inspectorPage: StageInspectorPage = .sculpt
   @State private var surfacePresentation = TerrainSurfacePresentation.analyticDefault
+  @AppStorage("latticewake.stage.firstPlayHintDismissed") private var firstPlayHintDismissed = false
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   private var roleEditStatus: String {
     if audio.roleChangesPending {
@@ -145,7 +146,8 @@ struct ContentView: View {
                 GeometryReader { stage in
                   TerrainContourSurface(snapshot: terrain.snapshot, pointer: input.pointerPosition,
                                         heldNotes: input.heldNotes.sorted(), activeLanes: audio.activeRoleLanes,
-                                        source: surfacePresentation)
+                                        source: surfacePresentation, shapingNotes: input.shapingNotes,
+                                        pointerNote: input.pointerNote, pointerGestureActive: input.pointerGestureActive)
                     .frame(width: max(1, stage.size.width), height: max(1, stage.size.height))
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0).onChanged { value in
@@ -158,6 +160,22 @@ struct ContentView: View {
                     .font(.caption).padding(7)
                     .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 7))
                     .padding(12)
+                }
+                if !firstPlayHintDismissed && !audio.running {
+                  HStack(spacing: 10) {
+                    Image(systemName: "hand.draw").foregroundStyle(LatticewakeDesign.cyan)
+                    VStack(alignment: .leading, spacing: 2) {
+                      Text("Play the terrain").font(.callout.weight(.semibold))
+                      Text("Start audio, then hold a key or drag here to bend its pitch and tone.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 4)
+                    Button { firstPlayHintDismissed = true } label: {
+                      Image(systemName: "xmark").font(.caption.weight(.semibold))
+                    }.buttonStyle(.plain).accessibilityLabel("Dismiss terrain play tip")
+                  }
+                  .padding(10).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10))
+                  .padding(12).frame(maxHeight: .infinity, alignment: .center)
                 }
                 if terrainIsFlat {
                   Label("This path produces no sustained tone", systemImage: "exclamationmark.triangle")

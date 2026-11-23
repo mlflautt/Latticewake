@@ -108,15 +108,22 @@ struct TerrainContourSurface: View {
   let activeLanes: Int
   let source: TerrainSurfacePresentation
   let media: TerrainSurfaceMedia?
+  let shapingNotes: [Int]
+  let pointerNote: Int?
+  let pointerGestureActive: Bool
 
   init(snapshot: TerrainStageSnapshot, pointer: CGPoint?, heldNotes: [Int], activeLanes: Int,
-       source: TerrainSurfacePresentation = .analyticDefault, media: TerrainSurfaceMedia? = nil) {
+       source: TerrainSurfacePresentation = .analyticDefault, media: TerrainSurfaceMedia? = nil,
+       shapingNotes: [Int] = [], pointerNote: Int? = nil, pointerGestureActive: Bool = false) {
     self.snapshot = snapshot
     self.pointer = pointer
     self.heldNotes = heldNotes
     self.activeLanes = activeLanes
     self.source = source
     self.media = media
+    self.shapingNotes = shapingNotes
+    self.pointerNote = pointerNote
+    self.pointerGestureActive = pointerGestureActive
   }
 
   var body: some View {
@@ -128,14 +135,26 @@ struct TerrainContourSurface: View {
       Canvas { context, size in
         drawContours(context: context, size: size)
         if let pointer {
-          context.stroke(Path(ellipseIn: CGRect(x: pointer.x - 8, y: pointer.y - 8, width: 16, height: 16)),
-                         with: .color(.cyan), lineWidth: 2)
+          let point = CGPoint(x: pointer.x, y: pointer.y)
+          var crosshair = Path()
+          crosshair.move(to: CGPoint(x: point.x - 15, y: point.y)); crosshair.addLine(to: CGPoint(x: point.x + 15, y: point.y))
+          crosshair.move(to: CGPoint(x: point.x, y: point.y - 15)); crosshair.addLine(to: CGPoint(x: point.x, y: point.y + 15))
+          context.stroke(crosshair, with: .color(.cyan.opacity(0.7)), lineWidth: 1)
+          let halo = Path(ellipseIn: CGRect(x: point.x - 10, y: point.y - 10, width: 20, height: 20))
+          context.fill(halo, with: .color(.cyan.opacity(0.16)))
+          context.stroke(halo, with: .color(.cyan), lineWidth: 2)
+          if pointerGestureActive, !shapingNotes.isEmpty {
+            let labels = shapingNotes.map(String.init).joined(separator: " · ")
+            let label = pointerNote.map { _ in "Pointer C3 · shaping \(labels)" } ?? "Shaping \(labels)"
+            context.draw(Text(label).font(.system(size: 11, weight: .medium, design: .monospaced)).foregroundColor(.white),
+                         at: CGPoint(x: min(size.width - 100, max(100, point.x)), y: max(26, point.y - 25)))
+          }
         }
       }
       .allowsHitTesting(false)
       VStack {
         HStack {
-          StageBadge(label: "DIRECT", value: heldNotes.isEmpty ? "idle" : "\(heldNotes.count) voice", color: .cyan)
+          StageBadge(label: "DIRECT", value: heldNotes.isEmpty ? (pointerGestureActive ? "pointer" : "idle") : "\(heldNotes.count) held · \(shapingNotes.count) shaped", color: .cyan)
           Spacer()
           StageBadge(label: "LANES", value: "\(activeLanes) active", color: .mint)
         }

@@ -53,6 +53,9 @@ media analysis are not yet implemented. See the
 [media-terrain interface boundary](docs/MEDIA_TERRAIN_INTERFACE.md).
 The audible A/B and output contract is documented in the
 [signature terrain voice specification](docs/SIGNATURE_TERRAIN_VOICE.md).
+Current deep-research briefs for image-derived terrain and native audio tooling
+are collected in
+[Gemini research prompts](research/GEMINI_DEEP_RESEARCH_PROMPTS.md).
 
 The terrain voice now prepares both Scene v1 analytic Surface layers and makes
 their scene morph and gesture extension audible. Its fixed output path adds

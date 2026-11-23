@@ -48,6 +48,8 @@ private struct PerformanceVoiceKey: Hashable {
   @Published private(set) var pointerPosition: CGPoint?
   @Published private(set) var pointerNote: Int?
   @Published private(set) var voices: [PerformanceVoice] = []
+  @Published private(set) var shapingNotes: [Int] = []
+  @Published private(set) var pointerGestureActive = false
   @Published private(set) var status = "Input ready"
   @Published private(set) var overflowRecoveries = 0
 
@@ -76,6 +78,8 @@ private struct PerformanceVoiceKey: Hashable {
     if let note = gesture.begin(held: keyboard.held, pointerNote: defaultPointerNote) {
       noteOn(note: note, velocity: 0.7, source: .pointer)
     }
+    pointerGestureActive = true
+    shapingNotes = gesture.targets
     let x = GestureState.normalized(location.x, length: size.width)
     let y = GestureState.normalized(location.y, length: size.height)
     pointerPosition = CGPoint(x: x * size.width, y: y * size.height)
@@ -94,6 +98,8 @@ private struct PerformanceVoiceKey: Hashable {
     }
     pointerPosition = nil
     pointerNote = nil
+    pointerGestureActive = false
+    shapingNotes = []
   }
 
   func focusLost() {
@@ -174,6 +180,8 @@ private struct PerformanceVoiceKey: Hashable {
     heldNotes = []
     pointerPosition = nil
     pointerNote = nil
+    pointerGestureActive = false
+    shapingNotes = []
     voiceMap.removeAll()
     voices = []
   }

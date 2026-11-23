@@ -29,6 +29,12 @@ stereo drift. The eight starter candidates exercise these controls with
 deliberately different technical profiles; their names are descriptive, not
 ratings or aesthetic selections.
 
+Cycle 059 makes direct touch legible on the Stage: the pointer marker has a
+crosshair and halo, active gesture labels identify the pointer voice and notes
+being shaped, and a dismissible first-play card explains the key/drag gesture.
+The note ownership display comes from the input multiplexer rather than being
+reconstructed from audio levels.
+
 Image and audio Surface descriptors are now visible to the UI without file
 access from rendering. A future resolved image Surface uses its source image as
 the dimmed coordinate plane, with interpreted contours, traversal, sampling
