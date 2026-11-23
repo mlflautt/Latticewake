@@ -51,6 +51,9 @@ idle-cost admission check. Scene v1 Analytic/Image/Audio source descriptors are
 visible through a source-aware presentation model, but image import and audible
 media analysis are not yet implemented. See the
 [media-terrain interface boundary](docs/MEDIA_TERRAIN_INTERFACE.md).
+The supplied image-ingest and macOS Stage reports, with design decisions and
+unverified claims separated, are indexed in the
+[image-terrain research synthesis](research/IMAGE_TERRAIN_REPORT_SYNTHESIS.md).
 The audible A/B and output contract is documented in the
 [signature terrain voice specification](docs/SIGNATURE_TERRAIN_VOICE.md).
 Current deep-research briefs for image-derived terrain and native audio tooling

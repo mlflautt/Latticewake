@@ -57,13 +57,33 @@ The Stage labels both endpoints; it never presents an unlabeled abstract blend.
 
 ## Import boundary
 
-Image decoding and provider analysis run off the audio thread. The project owns
-a normalized derived asset plus source hash, analysis settings, provider
-version, generated-asset hash, and portability state. The callback reads only
-prebuilt tables in an immutable RenderPlan; it never reads image files.
+Image decoding and provider analysis run off the audio thread. Preserve the
+source file and keep its hash distinct from the generated field hash. Store a
+versioned project-owned scalar-field asset and manifest with provider version,
+interpretation settings, orientation, coordinate mapping, and portability
+state. Do not make a platform-decoded float RGBA image the durable canonical
+asset; use a documented field encoding with deterministic normalization and
+bounded dimensions.
 
-Cycle 057 adds source-aware presentation structures and Stage labels. It does
-not claim image import or analysis. The import pipeline, asset resolver,
-provider preview, and first audible image-derived Surface are now an explicit
-Cycle 060 target, after the signature voice and registered Stage visualization
-are coherent. Audio-derived Surfaces remain later work.
+An Apple media adapter may decode the image and prepare a candidate. An asset
+resolver supplies validated in-memory field data to the portable C++
+`RenderPlanBuilder`. The builder compiles bounded periodic tables along the
+selected traversal. It has no image decoder or filesystem dependency. The
+callback reads only immutable prepared tables and never reads media files or
+project paths. Missing, flat, malformed, or invalid candidates leave the
+current active plan intact and produce a visible diagnostic; there is no
+unrelated oscillator fallback.
+
+Begin with one deterministic luminance provider and explicit fit/crop behavior.
+Treat channel, edge, gradient, periodic decomposition, interpolation, mip/table
+bank shape, and phase alignment as choices to compare against pinned fixtures.
+Select resource caps and algorithms from measured quality, preparation latency,
+and memory rather than report-proposed fixed dimensions or table-bank sizes.
+
+Cycle 057 added source-aware presentation structures and Stage labels; it did
+not add image import or analysis. The import pipeline, asset resolver, provider
+preview, and first audible image-derived Surface remain an explicit Cycle 060
+target. Keep the current Stage renderer unless target-Mac evidence identifies a
+specific limitation. Audio-derived Surfaces remain later work. The detailed
+research critique and proposed tests are in
+[`IMAGE_TERRAIN_REPORT_SYNTHESIS.md`](../research/IMAGE_TERRAIN_REPORT_SYNTHESIS.md).

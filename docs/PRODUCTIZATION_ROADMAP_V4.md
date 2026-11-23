@@ -273,17 +273,29 @@ while preserving the other two, compare the result, undo it, and save it.
   affected control, with a suggested recovery that never substitutes an
   unrelated oscillator.
 - Add image-derived Surface v1 as the first real media workflow: import or drag
-  a fractal/image, choose a deterministic luminance, channel, edge, or gradient
-  interpretation, preview the registered image/contour/path overlay, then
-  explicitly replace layer A or B. Store a project-owned normalized asset plus
-  source hash, provider version, settings, and generated hash; never read the
-  image in the callback.
+  a fractal/image into a reversible candidate, beginning with one deterministic
+  luminance interpretation and explicit fit/crop behavior. Preview the
+  registered source/interpretation/contour/path layers, then explicitly replace
+  layer A or B. Keep original-source and derived-field hashes distinct; store a
+  versioned, project-owned scalar-field asset with provider/version, settings,
+  coordinate convention, and portability state. Resolve validated in-memory
+  asset data into `RenderPlanBuilder`; never read image files in the callback.
+- Bound decode size, analysis time, and prepared memory. Select field
+  quantization, table-bank shape, seam handling, interpolation, and phase policy
+  from reproducible quality and resource measurements; do not assume a fixed
+  512-square float image, 64-frame bank, or a particular periodic decomposition.
+- Keep the existing Stage renderer unless target-Mac measurements establish a
+  resize, registration, frame-time, accessibility, or power problem that a
+  Metal-specific change would solve.
 
 **Acceptance:** the five-minute task—alter each component, compare A/B, undo,
 and save—requires no Diagnostics knowledge; a supplied fractal image can become
 a visible and audible deterministic Surface while Traversal and Articulation
 remain unchanged; previews never mutate saved state; every publication is
-prepared outside the callback and traceable.
+prepared outside the callback and traceable. A failed or missing image keeps
+the current active plan and gives a clear reason; it never substitutes a sine
+or unrelated oscillator. See the [image-terrain research synthesis](../research/IMAGE_TERRAIN_REPORT_SYNTHESIS.md)
+for the adopted boundary, rejected assumptions, and proposed evidence.
 
 #### Cycle 061 — Performance lanes and musical scene flow
 
