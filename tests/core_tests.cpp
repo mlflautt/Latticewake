@@ -301,6 +301,17 @@ void testSceneV1MigrationAndRenderPlan() {
   assert(RenderPlanBuilder{}.build(flatImageScene, 48000, flatFields, flatImagePlan, renderError));
   assert(flatImagePlan.terrain.variation == 0.0F);
   assert(flatImagePlan.diagnostic == TraversalDiagnostic::flat);
+  // A silent B layer at full morph must not inherit A's nonzero bounds.
+  SceneV1 flatBScene = imageScene;
+  flatBScene.surface.layers[1].sourceType = SurfaceSourceType::image;
+  flatBScene.surface.layers[1].asset = AssetDescriptor{"flat-b", "flat-b-hash", "application/vnd.latticewake.surface-field-v1"};
+  flatBScene.surface.morph = 1.0;
+  auto flatBFields = fields;
+  flatBFields[1] = {fieldEdge, fieldEdge, flatSamples, "flat-b-hash"};
+  RenderPlan flatBPlan;
+  assert(RenderPlanBuilder{}.build(flatBScene, 48000, flatBFields, flatBPlan, renderError));
+  assert(flatBPlan.terrain.variation == 0.0F);
+  assert(flatBPlan.diagnostic == TraversalDiagnostic::flat);
   auto wrongHashFields = fields;
   wrongHashFields[0].contentHash = "wrong-hash";
   assert(!RenderPlanBuilder{}.build(imageScene, 48000, wrongHashFields, imagePlan, renderError));

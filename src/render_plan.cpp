@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 namespace latticewake {
 namespace {
@@ -164,9 +165,8 @@ bool RenderPlanBuilder::build(const SceneV1& scene, const double sampleRate,
   candidate.terrain.morphTable = layerB.terrainTable;
   candidate.terrain.surfaceMorph = static_cast<float>(scene.surface.morph);
   const auto morph = candidate.terrain.surfaceMorph;
-  auto mixedBounds = std::minmax_element(candidate.terrain.terrainTable.begin(), candidate.terrain.terrainTable.end());
-  float mixedMinimum = *mixedBounds.first;
-  float mixedMaximum = *mixedBounds.second;
+  float mixedMinimum = std::numeric_limits<float>::infinity();
+  float mixedMaximum = -std::numeric_limits<float>::infinity();
   for (std::size_t index = 0; index < candidate.terrain.terrainTable.size(); ++index) {
     const float value = candidate.terrain.terrainTable[index] * (1.0F - morph) +
                         candidate.terrain.morphTable[index] * morph;

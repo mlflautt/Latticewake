@@ -101,5 +101,4 @@ struct TerrainSurfaceLayerMedia: Identifiable, Equatable {
 /// Asset visualization and diagnostics are resolved off the audio callback.
 struct TerrainSurfaceMedia: Equatable {
   let layers: [TerrainSurfaceLayerMedia]
-  let sampledPathVariation: Double?
 }

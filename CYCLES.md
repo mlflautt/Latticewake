@@ -15,6 +15,12 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 062 — prepared terrain diagnostic correction
+
+- Scope: correct the mixed-table range calculation, avoid reporting raw image
+  brightness as an audio diagnostic, and identify Stage layers by component.
+- Evidence and open native-review gate: `handoffs/cycle-062.md`.
+
 ### Cycle 061 — continuous Surface morph and safe image preflight
 
 - Commit: recorded in `handoffs/cycle-061.md` after the release commit.

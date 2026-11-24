@@ -118,7 +118,8 @@ Cycle 061 aligns the source-plane display with Scene morph: both resolved image
 layers remain registered and their source, interpretation, and contour overlays
 fade with the same A/B weights used by the prepared audio tables. Image/analytic
 morphs show the image contribution fading against the analytic terrain view.
-The flat-path warning is shown only when the active imported-field variation is
-known; a mixed image/analytic blend is not misreported from one layer alone.
+The flat-path warning is suppressed for image-containing scenes until the
+diagnostic can be sourced from the prepared audio tables. Raw image brightness
+is not sufficient because each table is normalized independently before mixing.
 Import now checks the regular-file size before reading, then hashes and decodes
 the same bounded byte snapshot to keep provenance tied to the analyzed media.
