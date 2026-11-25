@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 069 — native image-scene path, partial
+
+- Scope: exercise native import, play and save; reject silent role capture;
+  see `handoffs/cycle-069.md` for the still-open native reload gate.
+
 ### Cycle 068 — scene admission before playback
 
 - Scope: validate scene preparation before accepting scene state, and preserve

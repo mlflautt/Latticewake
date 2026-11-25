@@ -20,6 +20,10 @@ remain explicit decisions.
 
 ### Cycle 069 — honest first-use path and native scene round trip
 
+Status: **partial**. Native image import, preview, accept, device meter response
+and scene-file creation were observed. Native reload and UI capture remain open
+after computer-use accessibility timeouts; see `handoffs/cycle-069.md`.
+
 - Exercise one controlled image through Choose, Preview, Accept, play, Save As,
   close/reopen, Load and capture with one managed app instance and generated
   fixture media. Verify the saved image field and source hash survive and the

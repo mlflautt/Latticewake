@@ -8,6 +8,36 @@ import LatticewakeBridge
 @testable import LatticewakeApp
 
 final class LatticewakeAppTests: XCTestCase {
+  func testOptInNativeSavedImageSceneRoundTrip() throws {
+    let environment = ProcessInfo.processInfo.environment
+    guard let scenePath = environment["LW_NATIVE_IMAGE_SCENE"],
+          let imagePath = environment["LW_NATIVE_SOURCE_IMAGE"] else {
+      throw XCTSkip("Set LW_NATIVE_IMAGE_SCENE and LW_NATIVE_SOURCE_IMAGE to verify a native-saved fixture")
+    }
+    let sceneURL = URL(fileURLWithPath: scenePath)
+    let original = try Data(contentsOf: sceneURL)
+    let source = try Data(contentsOf: URL(fileURLWithPath: imagePath))
+    let loaded = try SceneLibrary.load(from: sceneURL)
+    let sourceHash = ImageTerrainAsset.hash(source)
+    XCTAssertEqual(loaded.surfaceAssets.count, 1)
+    let asset = try XCTUnwrap(loaded.surfaceAssets.values.first)
+    XCTAssertEqual(asset.sourceSHA256, sourceHash)
+    XCTAssertEqual(asset.id, ImageTerrainAsset.hash(asset.fieldBytes))
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    XCTAssertThrowsError(try OfflineCapture.render(sceneBytes: loaded.sceneBytes, assets: loaded.surfaceAssets, to: directory)) { error in
+      XCTAssertEqual(error as? OfflineCaptureError, .noEnabledRoles)
+    }
+    var controls = try RoleSceneBridge.controls(from: loaded.sceneBytes)
+    controls[0].enabled = true
+    let audibleScene = try RoleSceneBridge.apply(controls, to: loaded.sceneBytes)
+    let (wavURL, receipt) = try OfflineCapture.render(sceneBytes: audibleScene, assets: loaded.surfaceAssets, to: directory)
+    let wav = try Data(contentsOf: wavURL)
+    XCTAssertEqual(receipt.surfaceFieldHashes, [asset.id])
+    XCTAssertEqual(receipt.wavSHA256, SceneLibrary.receipt(for: wav).sha256)
+    XCTAssertTrue(wav.dropFirst(44).contains { $0 != 0 })
+    XCTAssertEqual(try Data(contentsOf: sceneURL), original)
+  }
   @MainActor func testPreparedDiagnosticWorksBeforeAudioStarts() throws {
     let audio = LatticewakeAudio()
     XCTAssertNil(audio.preparedTerrainFlat)
@@ -635,6 +665,15 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(try Data(contentsOf: secondURL), wav)
   XCTAssertEqual(secondReceipt.wavSHA256, receipt.wavSHA256)
 }
+
+  func testRoleCaptureRejectsSceneWithNoEnabledRoles() throws {
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    XCTAssertThrowsError(try OfflineCapture.render(sceneBytes: Data(DemoScene.gestureJSON.utf8), to: directory)) { error in
+      XCTAssertEqual(error as? OfflineCaptureError, .noEnabledRoles)
+    }
+    XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
+  }
 
   func testImageSceneOfflineCaptureRequiresAndBindsEmbeddedField() throws {
     let field = Data([0x4c, 0x57, 0x53, 0x46, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02,

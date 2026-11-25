@@ -33,12 +33,26 @@ struct SignatureDemonstrationReceiptV1: Codable, Equatable {
   let wavSHA256: String?
 }
 
+enum OfflineCaptureError: LocalizedError, Equatable {
+  case noEnabledRoles
+
+  var errorDescription: String? {
+    switch self {
+    case .noEnabledRoles:
+      return "Enable at least one role before capturing. Capture renders the role sequence; it does not record live keyboard or pointer playing."
+    }
+  }
+}
+
 enum OfflineCapture {
   static let sampleRate = 48_000
   static let frameCount = sampleRate * 8
   private static let blockFrames = 256
 
   static func render(sceneBytes: Data, assets: [String: ImageTerrainAsset] = [:], to directory: URL) throws -> (URL, CaptureReceiptV1) {
+    guard try RoleSceneBridge.controls(from: sceneBytes).contains(where: { $0.enabled }) else {
+      throw OfflineCaptureError.noEnabledRoles
+    }
     guard let text = String(data: sceneBytes, encoding: .utf8), let kernel = capture_kernel_create() else {
       throw NSError(domain: "Latticewake", code: 40, userInfo: [NSLocalizedDescriptionKey: "Could not create offline renderer"])
     }
