@@ -140,13 +140,16 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   private var sceneJSON = DemoScene.canonicalJSON
   private var surfaceAssets: [String: ImageTerrainAsset] = [:]
 
-  func registerSurfaceAssets(_ assets: [String: ImageTerrainAsset]) {
-    surfaceAssets = assets
-  }
-
-  func setScene(bytes: Data) throws {
+  func setScene(bytes: Data, assets: [String: ImageTerrainAsset]? = nil) throws {
     guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
-    let flat = preparedFlat(text)
+    let previousAssets = surfaceAssets
+    if let assets { surfaceAssets = assets }
+    var accepted = false
+    defer { if !accepted { surfaceAssets = previousAssets } }
+    guard let flat = preparedFlat(text) else {
+      throw NSError(domain: "Latticewake", code: 2,
+                    userInfo: [NSLocalizedDescriptionKey: "Scene could not be prepared. Check its terrain settings and embedded image fields."])
+    }
     if running, let kernel {
       let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
       guard prepareOrPublish(text, kernel: kernel, rate: sampleRate, publish: true) else {
@@ -156,6 +159,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
     }
     sceneJSON = text
     preparedTerrainFlat = flat
+    accepted = true
   }
 
   private func preparedFlat(_ json: String) -> Bool? {
@@ -180,7 +184,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
 
   func queueRoleSceneAtLoop(bytes: Data) throws {
     guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
-    guard running, let kernel else { sceneJSON = text; roleChangesPending = false; return }
+    guard running, let kernel else { try setScene(bytes: bytes); roleChangesPending = false; return }
     let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
     guard publishRoleScene(text, kernel: kernel, rate: sampleRate) else {
       throw NSError(domain: "Latticewake", code: 5, userInfo: [NSLocalizedDescriptionKey: "A role change is already queued for the next loop boundary"])

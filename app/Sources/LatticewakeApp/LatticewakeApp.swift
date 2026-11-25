@@ -653,12 +653,7 @@ struct ContentView: View {
   private func previewTemporary(_ bytes: Data, label: String,
                                 assets: [String: ImageTerrainAsset]? = nil) throws {
     let resolvedAssets = assets ?? surfaceAssets
-    audio.registerSurfaceAssets(resolvedAssets)
-    do { try audio.setScene(bytes: bytes) }
-    catch {
-      audio.registerSurfaceAssets(previewSurfaceAssets ?? surfaceAssets)
-      throw error
-    }
+    try audio.setScene(bytes: bytes, assets: resolvedAssets)
     try terrain.prepare(sceneBytes: bytes)
     surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
     previewSurfaceAssets = resolvedAssets
@@ -669,8 +664,7 @@ struct ContentView: View {
 
   private func returnToCurrent() {
     do {
-      audio.registerSurfaceAssets(surfaceAssets)
-      try audio.setScene(bytes: sceneBytes)
+      try audio.setScene(bytes: sceneBytes, assets: surfaceAssets)
       try terrain.prepare(sceneBytes: sceneBytes)
       surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: sceneBytes)
       activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: surfaceAssets)
@@ -689,24 +683,28 @@ struct ContentView: View {
 
   private func installScene(_ bytes: Data, url: URL?, recordUndo: Bool, dirty: Bool,
                             assets: [String: ImageTerrainAsset]? = nil) throws {
+    let installedAssets = assets ?? surfaceAssets
+    let installedRoles = try RoleSceneBridge.controls(from: bytes)
+    let installedEditor = try SceneEditorBridge.controls(from: bytes)
+    let installedModulation = try ModulationBridge.controls(from: bytes)
+    let installedPresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
+    let installedTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
+    let checkedTerrain = TerrainStageModel()
+    try checkedTerrain.prepare(sceneBytes: bytes)
+    try audio.setScene(bytes: bytes, assets: installedAssets)
     if recordUndo, !sceneBytes.isEmpty {
       undoHistory.record(sceneBytes, acceptedGrowReceipts: acceptedGrowReceipts,
                          acceptedAgentReceipts: acceptedAgentReceipts, surfaceAssets: surfaceAssets)
     }
-    let installedAssets = assets ?? surfaceAssets
-    audio.registerSurfaceAssets(installedAssets)
-    try audio.setScene(bytes: bytes)
     try terrain.prepare(sceneBytes: bytes)
-    let installedRoles = try RoleSceneBridge.controls(from: bytes)
     roles = installedRoles
     rolePerformanceMask = .init()
-    editorControls = try SceneEditorBridge.controls(from: bytes)
-    modulationControls = try ModulationBridge.controls(from: bytes)
-    surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
+    editorControls = installedEditor
+    modulationControls = installedModulation
+    surfacePresentation = installedPresentation
     surfaceAssets = installedAssets
     previewSurfaceAssets = nil
     activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: installedAssets)
-    let installedTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
     if audio.roleChangesPending {
       queuedRoles = installedRoles
       pendingRoleTrace = installedTrace
@@ -757,10 +755,10 @@ struct ContentView: View {
     guard panel.runModal() == .OK, let url = panel.url else { return }
     do {
       let loaded = try SceneLibrary.load(from: url)
+      try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false, assets: loaded.surfaceAssets)
       performance = loaded.performance
       acceptedGrowReceipts = loaded.acceptedGrowReceipts
       acceptedAgentReceipts = loaded.acceptedAgentReceipts
-      try installScene(loaded.sceneBytes, url: url, recordUndo: true, dirty: false, assets: loaded.surfaceAssets)
       receipt = "Loaded \(loaded.originalSceneV0 ? "Scene v0" : "Library v1") \(String(loaded.receipt.sha256.prefix(12)))"
     } catch { self.error = error.localizedDescription }
   }

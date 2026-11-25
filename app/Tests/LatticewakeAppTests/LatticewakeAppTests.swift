@@ -22,12 +22,15 @@ final class LatticewakeAppTests: XCTestCase {
                                       fieldBytes: field, sourcePreviewPNG: Data())
     let scene = try SurfaceSceneBridge.replacingLayer(0, with: asset, in: Data(DemoScene.gestureJSON.utf8))
     let audio = LatticewakeAudio()
-    audio.registerSurfaceAssets([asset.id: asset])
+    try audio.setScene(bytes: scene, assets: [asset.id: asset])
+    XCTAssertEqual(audio.preparedTerrainFlat, true)
+    XCTAssertThrowsError(try audio.setScene(bytes: scene, assets: [:]))
+    XCTAssertEqual(audio.preparedTerrainFlat, true)
+    // A rejected replacement must retain the accepted assets for later use.
     try audio.setScene(bytes: scene)
     XCTAssertEqual(audio.preparedTerrainFlat, true)
-    audio.registerSurfaceAssets([:])
-    try audio.setScene(bytes: scene)
-    XCTAssertNil(audio.preparedTerrainFlat)
+    XCTAssertThrowsError(try audio.setScene(bytes: Data("not a scene".utf8)))
+    XCTAssertEqual(audio.preparedTerrainFlat, true)
   }
   func testKeyboardRepeatAndFocusRelease() {
   var keys = KeyboardState()

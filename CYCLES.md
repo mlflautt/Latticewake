@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 068 — scene admission before playback
+
+- Scope: validate scene preparation before accepting scene state, and preserve
+  the previous asset set after rejection; see `handoffs/cycle-068.md`.
+
 ### Cycle 067 — per-lane note-gate indicators
 
 - Scope: publish each generated lane's tracked note-gate state to the Stage;
