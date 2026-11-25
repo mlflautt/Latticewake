@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 064 — image scene preview and capture
+
+- Scope: isolate temporary image assets and enable deterministic offline capture
+  from image-backed scenes; see `handoffs/cycle-064.md`.
+
 ### Cycle 063 — prepared terrain diagnostic
 
 - Scope: use the portable prepared tables for the neutral flat-path diagnostic,

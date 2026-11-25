@@ -627,6 +627,23 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(savedReceipt, receipt)
 }
 
+  func testImageSceneOfflineCaptureRequiresAndBindsEmbeddedField() throws {
+    let field = Data([0x4c, 0x57, 0x53, 0x46, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02,
+                      0x00, 0x00, 0xff, 0xff, 0x00, 0x00, 0xff, 0xff])
+    let asset = try ImageTerrainAsset(sourceSHA256: String(repeating: "d", count: 64),
+                                      fieldBytes: field, sourcePreviewPNG: Data())
+    let scene = try SurfaceSceneBridge.replacingLayer(0, with: asset, in: Data(DemoScene.fourRoleJSON.utf8))
+    let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    XCTAssertThrowsError(try OfflineCapture.render(sceneBytes: scene, to: directory))
+    let (url, receipt) = try OfflineCapture.render(sceneBytes: scene, assets: [asset.id: asset], to: directory)
+    let wav = try Data(contentsOf: url)
+    XCTAssertEqual(receipt.surfaceFieldHashes, [asset.id])
+    XCTAssertTrue(wav.dropFirst(44).contains { $0 != 0 })
+    let saved = try JSONDecoder().decode(CaptureReceiptV1.self, from: Data(contentsOf: url.appendingPathExtension("receipt.json")))
+    XCTAssertEqual(saved, receipt)
+  }
+
   func testSignatureDemonstrationsAreBoundAndDistinct() throws {
     let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent(UUID().uuidString, isDirectory: true)
     defer { try? FileManager.default.removeItem(at: directory) }

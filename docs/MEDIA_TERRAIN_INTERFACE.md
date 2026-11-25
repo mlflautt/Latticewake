@@ -114,6 +114,12 @@ actual imported result, and provider version plus source hash preserve its
 provenance. Audio-derived import, multiple image providers, seam correction,
 phase alignment choices, and broader portability/export policy remain open.
 
+Cycle 064 keeps candidate image assets separate from accepted scene assets
+through preview and restores the accepted asset set on Return. Offline role
+capture resolves and validates the same embedded fields as playback and records
+their hashes in the capture receipt. A preview targeted at a layer with zero
+current morph weight explains why that layer is inaudible.
+
 Cycle 061 aligns the source-plane display with Scene morph: both resolved image
 layers remain registered and their source, interpretation, and contour overlays
 fade with the same A/B weights used by the prepared audio tables. Image/analytic

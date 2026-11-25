@@ -18,6 +18,7 @@ struct CaptureReceiptV1: Codable, Equatable {
   let frameCount: Int
   let roleTransport: Bool
   let wavFilename: String
+  let surfaceFieldHashes: [String]?
 }
 
 struct SignatureDemonstrationReceiptV1: Codable, Equatable {
@@ -34,12 +35,12 @@ enum OfflineCapture {
   static let frameCount = sampleRate * 8
   private static let blockFrames = 256
 
-  static func render(sceneBytes: Data, to directory: URL) throws -> (URL, CaptureReceiptV1) {
+  static func render(sceneBytes: Data, assets: [String: ImageTerrainAsset] = [:], to directory: URL) throws -> (URL, CaptureReceiptV1) {
     guard let text = String(data: sceneBytes, encoding: .utf8), let kernel = capture_kernel_create() else {
       throw NSError(domain: "Latticewake", code: 40, userInfo: [NSLocalizedDescriptionKey: "Could not create offline renderer"])
     }
     defer { capture_kernel_destroy(kernel) }
-    let prepared = text.withCString { capture_kernel_prepare_scene_json(kernel, $0, Double(sampleRate)) }
+    let prepared = try prepare(text, assets: assets, kernel: kernel)
     guard prepared != 0 else { throw NSError(domain: "Latticewake", code: 41, userInfo: [NSLocalizedDescriptionKey: "Scene could not be prepared for capture"] ) }
     capture_kernel_set_roles_running(kernel, 1)
     var samples = [Float](repeating: 0, count: frameCount)
@@ -58,13 +59,14 @@ enum OfflineCapture {
     try wavData(samples).write(to: wavURL, options: .atomic)
     let receipt = CaptureReceiptV1(schemaVersion: "latticewake-capture-v1", sceneSHA256: sceneHash,
                                    sceneByteCount: sceneBytes.count, sampleRate: sampleRate,
-                                   frameCount: samples.count, roleTransport: true, wavFilename: wavURL.lastPathComponent)
+                                   frameCount: samples.count, roleTransport: true, wavFilename: wavURL.lastPathComponent,
+                                   surfaceFieldHashes: try referencedHashes(text))
     let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
     try encoder.encode(receipt).write(to: wavURL.appendingPathExtension("receipt.json"), options: .atomic)
     return (wavURL, receipt)
   }
 
-  static func renderSignatureDemonstrations(sceneBytes: Data, to directory: URL) throws
+  static func renderSignatureDemonstrations(sceneBytes: Data, assets: [String: ImageTerrainAsset] = [:], to directory: URL) throws
     -> [(URL, SignatureDemonstrationReceiptV1)] {
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     return try ["midi-notes", "terrain-gesture"].map { fixture in
@@ -72,7 +74,7 @@ enum OfflineCapture {
         throw NSError(domain: "Latticewake", code: 43, userInfo: [NSLocalizedDescriptionKey: "Could not create demonstration renderer"])
       }
       defer { capture_kernel_destroy(kernel) }
-      guard text.withCString({ capture_kernel_prepare_scene_json(kernel, $0, Double(sampleRate)) }) != 0 else {
+      guard try prepare(text, assets: assets, kernel: kernel) != 0 else {
         throw NSError(domain: "Latticewake", code: 44, userInfo: [NSLocalizedDescriptionKey: "Demonstration scene could not be prepared"])
       }
       let frames = sampleRate * 4
@@ -124,6 +126,57 @@ enum OfflineCapture {
       let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
       try encoder.encode(receipt).write(to: url.appendingPathExtension("receipt.json"), options: .atomic)
       return (url, receipt)
+    }
+  }
+
+  private static func referencedHashes(_ json: String) throws -> [String] {
+    guard let root = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any] else {
+      throw NSError(domain: "Latticewake", code: 47, userInfo: [NSLocalizedDescriptionKey: "Invalid scene document"])
+    }
+    guard let surface = root["surface"] as? [String: Any],
+          let layers = surface["layers"] as? [[String: Any]], layers.count == 2 else { return [] }
+    return try layers.compactMap { layer in
+      guard layer["sourceType"] as? String == "image" else { return nil }
+      guard let hash = layer["assetHash"] as? String, !hash.isEmpty else {
+        throw NSError(domain: "Latticewake", code: 48, userInfo: [NSLocalizedDescriptionKey: "Image Surface has no field hash"])
+      }
+      return hash
+    }
+  }
+
+  private static func prepare(_ json: String, assets: [String: ImageTerrainAsset], kernel: OpaquePointer) throws -> Int32 {
+    let root = try JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any]
+    let surface = root?["surface"] as? [String: Any]
+    guard let layers = surface?["layers"] as? [[String: Any]], layers.count == 2 else {
+      return json.withCString { capture_kernel_prepare_scene_json(kernel, $0, Double(sampleRate)) }
+    }
+    let hashes: [String?] = try layers.map { layer in
+      guard layer["sourceType"] as? String == "image" else { return nil }
+      guard let hash = layer["assetHash"] as? String, let asset = assets[hash], asset.id == hash else {
+        throw NSError(domain: "Latticewake", code: 49, userInfo: [NSLocalizedDescriptionKey: "Capture requires the scene's embedded image field"])
+      }
+      return hash
+    }
+    let samples = try hashes.map { hash -> [UInt16] in
+      guard let hash, let asset = assets[hash] else { return [] }
+      return try asset.samples()
+    }
+    return samples[0].withUnsafeBufferPointer { a in
+      samples[1].withUnsafeBufferPointer { b in
+        (hashes[0] ?? "").withCString { ah in
+          (hashes[1] ?? "").withCString { bh in
+            let fields = [
+              LWSurfaceField(samples: a.baseAddress, width: UInt32(hashes[0].flatMap { assets[$0]?.width } ?? 0),
+                             height: UInt32(hashes[0].flatMap { assets[$0]?.height } ?? 0), content_hash: ah),
+              LWSurfaceField(samples: b.baseAddress, width: UInt32(hashes[1].flatMap { assets[$0]?.width } ?? 0),
+                             height: UInt32(hashes[1].flatMap { assets[$0]?.height } ?? 0), content_hash: bh)
+            ]
+            return fields.withUnsafeBufferPointer { pointer in
+              json.withCString { lw_kernel_prepare_scene_json_with_fields(kernel, $0, Double(sampleRate), pointer.baseAddress!) }
+            }
+          }
+        }
+      }
     }
   }
 

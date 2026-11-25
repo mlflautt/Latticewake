@@ -47,6 +47,7 @@ struct ContentView: View {
   @State private var surfacePresentation = TerrainSurfacePresentation.analyticDefault
   @State private var activeSurfaceMedia: TerrainSurfaceMedia?
   @State private var surfaceAssets: [String: ImageTerrainAsset] = [:]
+  @State private var previewSurfaceAssets: [String: ImageTerrainAsset]?
   @State private var candidateImageAsset: ImageTerrainAsset?
   @State private var candidateImageName = ""
   @State private var imageTargetLayer = 0
@@ -364,7 +365,7 @@ struct ContentView: View {
     VStack(alignment: .leading, spacing: 8) {
       Text("IMAGE SURFACE").font(.caption2.monospaced()).foregroundStyle(LatticewakeDesign.cyan)
       if let imageLayer = surfacePresentation.layers.first(where: { $0.kind == .image }) {
-        if let hash = imageLayer.assetHash, let asset = surfaceAssets[hash] {
+        if let hash = imageLayer.assetHash, let asset = (previewSurfaceAssets ?? surfaceAssets)[hash] {
           Text("\(imageLayer.id.hasSuffix(":b") ? "Layer B" : "Layer A") · \(asset.sourceName)")
             .font(.caption.weight(.medium)).lineLimit(1)
           Text("Source \(asset.sourceSHA256.prefix(10)) · Field \(asset.contentHash.prefix(10)) · \(asset.providerVersion)")
@@ -434,7 +435,9 @@ struct ContentView: View {
       preparedAssets[candidateImageAsset.id] = candidateImageAsset
       let bytes = try SurfaceSceneBridge.replacingLayer(imageTargetLayer, with: candidateImageAsset, in: sceneBytes)
       try previewTemporary(bytes, label: "Image Surface preview", assets: preparedAssets)
-      imageImportStatus = "Previewing Layer \(imageTargetLayer == 0 ? "A" : "B"); saved scene is unchanged."
+      let weight = imageTargetLayer == 0 ? 1 - editorControls.surfaceMorph : editorControls.surfaceMorph
+      let hint = weight < 0.01 ? " This layer has no audible weight at the current Morph; adjust Morph to hear it." : ""
+      imageImportStatus = "Previewing Layer \(imageTargetLayer == 0 ? "A" : "B"); saved scene is unchanged.\(hint)"
     } catch { imageImportStatus = error.localizedDescription }
   }
 
@@ -455,6 +458,10 @@ struct ContentView: View {
 
   private func rejectImageCandidate() {
     if previewActive { returnToCurrent() }
+    guard !previewActive else {
+      imageImportStatus = "Could not restore the current scene yet; the image preview is still active."
+      return
+    }
     candidateImageAsset = nil
     candidateImageName = ""
     imageImportStatus = "Image candidate discarded; the scene is unchanged."
@@ -644,12 +651,17 @@ struct ContentView: View {
 
   private func previewTemporary(_ bytes: Data, label: String,
                                 assets: [String: ImageTerrainAsset]? = nil) throws {
-    if let assets { audio.registerSurfaceAssets(assets) }
-    try audio.setScene(bytes: bytes)
+    let resolvedAssets = assets ?? surfaceAssets
+    audio.registerSurfaceAssets(resolvedAssets)
+    do { try audio.setScene(bytes: bytes) }
+    catch {
+      audio.registerSurfaceAssets(previewSurfaceAssets ?? surfaceAssets)
+      throw error
+    }
     try terrain.prepare(sceneBytes: bytes)
     surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
-    if let assets { surfaceAssets = assets }
-    activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: surfaceAssets)
+    previewSurfaceAssets = resolvedAssets
+    activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: resolvedAssets)
     previewActive = true
     receipt = "\(label) • Return restores current scene"
   }
@@ -661,6 +673,7 @@ struct ContentView: View {
       try terrain.prepare(sceneBytes: sceneBytes)
       surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: sceneBytes)
       activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: surfaceAssets)
+      previewSurfaceAssets = nil
       previewActive = false
       receipt = String(SceneLibrary.receipt(for: sceneBytes).sha256.prefix(12))
     } catch { self.error = error.localizedDescription }
@@ -690,6 +703,7 @@ struct ContentView: View {
     modulationControls = try ModulationBridge.controls(from: bytes)
     surfacePresentation = try TerrainSurfacePresentation.decode(sceneBytes: bytes)
     surfaceAssets = installedAssets
+    previewSurfaceAssets = nil
     activeSurfaceMedia = makeSurfaceMedia(presentation: surfacePresentation, assets: installedAssets)
     let installedTrace = try RoleTraceBridge.preview(sceneBytes: bytes)
     if audio.roleChangesPending {
@@ -773,7 +787,7 @@ struct ContentView: View {
       let root = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask,
                                              appropriateFor: nil, create: true)
         .appendingPathComponent("Latticewake/Captures", isDirectory: true)
-      let (url, captureReceipt) = try OfflineCapture.render(sceneBytes: sceneBytes, to: root)
+      let (url, captureReceipt) = try OfflineCapture.render(sceneBytes: sceneBytes, assets: surfaceAssets, to: root)
       receipt = "Capture \(url.lastPathComponent) • \(captureReceipt.frameCount) frames"
     } catch { self.error = error.localizedDescription }
   }
