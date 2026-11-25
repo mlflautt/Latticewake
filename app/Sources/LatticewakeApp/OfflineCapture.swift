@@ -19,6 +19,7 @@ struct CaptureReceiptV1: Codable, Equatable {
   let roleTransport: Bool
   let wavFilename: String
   let surfaceFieldHashes: [String]?
+  let wavSHA256: String?
 }
 
 struct SignatureDemonstrationReceiptV1: Codable, Equatable {
@@ -28,6 +29,8 @@ struct SignatureDemonstrationReceiptV1: Codable, Equatable {
   let sampleRate: Int
   let frameCount: Int
   let wavFilename: String
+  let surfaceFieldHashes: [String]?
+  let wavSHA256: String?
 }
 
 enum OfflineCapture {
@@ -55,14 +58,14 @@ enum OfflineCapture {
     }
     let sceneHash = SceneLibrary.receipt(for: sceneBytes).sha256
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let wavURL = directory.appendingPathComponent("latticewake-\(sceneHash.prefix(12))-48000-8s.wav")
-    try wavData(samples).write(to: wavURL, options: .atomic)
+    let wavURL = directory.appendingPathComponent("latticewake-\(sceneHash.prefix(12))-\(UUID().uuidString.lowercased())-48000-8s.wav")
+    let wav = wavData(samples)
     let receipt = CaptureReceiptV1(schemaVersion: "latticewake-capture-v1", sceneSHA256: sceneHash,
                                    sceneByteCount: sceneBytes.count, sampleRate: sampleRate,
                                    frameCount: samples.count, roleTransport: true, wavFilename: wavURL.lastPathComponent,
-                                   surfaceFieldHashes: try referencedHashes(text))
+                                   surfaceFieldHashes: try referencedHashes(text), wavSHA256: SceneLibrary.receipt(for: wav).sha256)
     let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-    try encoder.encode(receipt).write(to: wavURL.appendingPathExtension("receipt.json"), options: .atomic)
+    try writeCapture(wav, receipt: encoder.encode(receipt), to: wavURL)
     return (wavURL, receipt)
   }
 
@@ -117,15 +120,29 @@ enum OfflineCapture {
         offset += count
       }
       let sceneHash = SceneLibrary.receipt(for: sceneBytes).sha256
-      let url = directory.appendingPathComponent("latticewake-\(sceneHash.prefix(12))-\(fixture).wav")
-      try wavData(samples).write(to: url, options: .atomic)
+      let url = directory.appendingPathComponent("latticewake-\(sceneHash.prefix(12))-\(UUID().uuidString.lowercased())-\(fixture).wav")
+      let wav = wavData(samples)
       let receipt = SignatureDemonstrationReceiptV1(schemaVersion: "latticewake-signature-demo-v1",
                                                      sceneSHA256: sceneHash, fixture: fixture,
                                                      sampleRate: sampleRate, frameCount: frames,
-                                                     wavFilename: url.lastPathComponent)
+                                                     wavFilename: url.lastPathComponent,
+                                                     surfaceFieldHashes: try referencedHashes(text),
+                                                     wavSHA256: SceneLibrary.receipt(for: wav).sha256)
       let encoder = JSONEncoder(); encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
-      try encoder.encode(receipt).write(to: url.appendingPathExtension("receipt.json"), options: .atomic)
+      try writeCapture(wav, receipt: encoder.encode(receipt), to: url)
       return (url, receipt)
+    }
+  }
+
+  private static func writeCapture(_ wav: Data, receipt: Data, to url: URL) throws {
+    try wav.write(to: url, options: .withoutOverwriting)
+    do {
+      try receipt.write(to: url.appendingPathExtension("receipt.json"), options: .withoutOverwriting)
+    } catch {
+      // This invocation exclusively created the WAV, so remove only that
+      // incomplete output if its receipt cannot be created.
+      try? FileManager.default.removeItem(at: url)
+      throw error
     }
   }
 

@@ -625,6 +625,12 @@ final class LatticewakeAppTests: XCTestCase {
   XCTAssertEqual(receipt.sceneSHA256, SceneLibrary.receipt(for: bytes).sha256)
   XCTAssertTrue(receipt.frameCount == 384_000 && receipt.roleTransport)
   XCTAssertEqual(savedReceipt, receipt)
+  XCTAssertEqual(receipt.wavSHA256, SceneLibrary.receipt(for: wav).sha256)
+  let (secondURL, secondReceipt) = try OfflineCapture.render(sceneBytes: bytes, to: directory)
+  XCTAssertNotEqual(url, secondURL)
+  XCTAssertEqual(try Data(contentsOf: url), wav)
+  XCTAssertEqual(try Data(contentsOf: secondURL), wav)
+  XCTAssertEqual(secondReceipt.wavSHA256, receipt.wavSHA256)
 }
 
   func testImageSceneOfflineCaptureRequiresAndBindsEmbeddedField() throws {
@@ -642,6 +648,18 @@ final class LatticewakeAppTests: XCTestCase {
     XCTAssertTrue(wav.dropFirst(44).contains { $0 != 0 })
     let saved = try JSONDecoder().decode(CaptureReceiptV1.self, from: Data(contentsOf: url.appendingPathExtension("receipt.json")))
     XCTAssertEqual(saved, receipt)
+    let sceneURL = directory.appendingPathComponent("embedded.latticewake.json")
+    _ = try SceneLibrary.save(SceneLibraryDocumentV1(sceneJSON: String(decoding: scene, as: UTF8.self),
+                                                      surfaceAssets: [asset.id: asset]), to: sceneURL)
+    let reopened = try SceneLibrary.load(from: sceneURL)
+    let (reopenedWav, _) = try OfflineCapture.render(sceneBytes: reopened.sceneBytes, assets: reopened.surfaceAssets, to: directory)
+    XCTAssertEqual(try Data(contentsOf: reopenedWav), wav)
+    let brokenURL = directory.appendingPathComponent("missing.latticewake.json")
+    let broken = SceneLibraryDocumentV1(sceneJSON: String(decoding: scene, as: UTF8.self))
+    try JSONEncoder().encode(broken).write(to: brokenURL)
+    XCTAssertThrowsError(try SceneLibrary.load(from: brokenURL)) { error in
+      XCTAssertEqual(error as? SceneLibraryError, .missingSurfaceAsset(asset.id))
+    }
   }
 
   func testSignatureDemonstrationsAreBoundAndDistinct() throws {

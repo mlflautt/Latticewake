@@ -82,9 +82,13 @@ enum SceneLibrary {
       let document = try JSONDecoder().decode(SceneLibraryDocumentV1.self, from: bytes)
       try document.performance.validate()
       let canonicalScene = try canonicalSceneV1(document.sceneJSON)
+      let verifiedAssets = try validateAssets(document.surfaceAssets)
+      for hash in try referencedImageHashes(in: canonicalScene) where verifiedAssets[hash] == nil {
+        throw SceneLibraryError.missingSurfaceAsset(hash)
+      }
       return LoadedSceneDocument(sceneBytes: canonicalScene, performance: document.performance,
                                  originalSceneV0: false, receipt: receipt, acceptedGrowReceipts: document.acceptedGrowReceipts, acceptedAgentReceipts: document.acceptedAgentReceipts,
-                                 surfaceAssets: try validateAssets(document.surfaceAssets))
+                                 surfaceAssets: verifiedAssets)
     }
     return LoadedSceneDocument(sceneBytes: bytes, performance: .init(), originalSceneV0: true, receipt: receipt, acceptedGrowReceipts: [], acceptedAgentReceipts: [], surfaceAssets: [:])
   }

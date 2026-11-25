@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 066 — reproducible image-scene capture
+
+- Scope: protect repeated captures and verify saved image scenes reproduce
+  their render; see `handoffs/cycle-066.md`.
+
 ### Cycle 065 — compact Stage layout
 
 - Scope: reflow the compact top bar and make the macro and lane strips
