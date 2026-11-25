@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 065 — compact Stage layout
+
+- Scope: reflow the compact top bar and make the macro and lane strips
+  horizontally scrollable; see `handoffs/cycle-065.md`.
+
 ### Cycle 064 — image scene preview and capture
 
 - Scope: isolate temporary image assets and enable deterministic offline capture

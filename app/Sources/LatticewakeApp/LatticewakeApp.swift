@@ -64,12 +64,13 @@ struct ContentView: View {
   }
   var body: some View {
     GeometryReader { window in
-      let allowsTwoDrawers = window.size.width >= 1_180
+      let allowsTwoDrawers = window.size.width >= 1_500
       ZStack {
         LatticewakeDesign.background.ignoresSafeArea()
         VStack(spacing: 0) {
           StageTopBar(
             workspace: $workspace,
+            compact: window.size.width < 1_150,
             sceneName: sceneURL?.deletingPathExtension().lastPathComponent ?? "Starter Terrain",
             isDirty: isDirty,
             audioRunning: audio.running,
@@ -231,7 +232,7 @@ struct ContentView: View {
                   Picker("Inspector", selection: $inspectorPage) {
                     ForEach(StageInspectorPage.allCases) { Text($0.rawValue).tag($0) }
                   }
-                  .pickerStyle(.segmented)
+                  .pickerStyle(.segmented).labelsHidden()
                   switch inspectorPage {
                   case .sculpt:
                     Text("Surface · Traversal · Articulation").font(.caption).foregroundStyle(.secondary)
@@ -377,7 +378,7 @@ struct ContentView: View {
       }
       Picker("Replace layer", selection: $imageTargetLayer) {
         Text("Layer A").tag(0); Text("Layer B").tag(1)
-      }.pickerStyle(.segmented)
+      }.pickerStyle(.segmented).labelsHidden()
       Button(importingImage ? "Preparing image…" : "Choose Image…", action: chooseImage)
         .disabled(importingImage)
       if let candidateImageAsset {

@@ -29,6 +29,7 @@ enum LatticewakeDesign {
 
 struct StageTopBar: View {
   @Binding var workspace: StageWorkspace
+  let compact: Bool
   let sceneName: String
   let isDirty: Bool
   let audioRunning: Bool
@@ -47,6 +48,7 @@ struct StageTopBar: View {
   let panic: () -> Void
 
   var body: some View {
+    VStack(alignment: .leading, spacing: 6) {
     HStack(spacing: 14) {
       HStack(spacing: 9) {
         RoundedRectangle(cornerRadius: 7)
@@ -64,13 +66,15 @@ struct StageTopBar: View {
           .font(.caption2).foregroundStyle(.secondary)
         }
       }
-      .frame(minWidth: 190, alignment: .leading)
+      .frame(minWidth: compact ? 115 : 190, maxWidth: compact ? 150 : 230, alignment: .leading)
 
+      if !compact {
       Picker("Workspace", selection: $workspace) {
         ForEach(StageWorkspace.allCases) { Text($0.rawValue).tag($0) }
       }
-      .pickerStyle(.segmented)
+      .pickerStyle(.segmented).labelsHidden()
       .frame(maxWidth: 270)
+      }
 
       Spacer(minLength: 8)
 
@@ -119,6 +123,15 @@ struct StageTopBar: View {
     }
     .padding(.horizontal, 14)
     .frame(minHeight: 58)
+    if compact {
+      Picker("Workspace", selection: $workspace) {
+        ForEach(StageWorkspace.allCases) { Text($0.rawValue).tag($0) }
+      }
+      .pickerStyle(.segmented).labelsHidden()
+      .frame(width: 270)
+      .padding(.horizontal, 14).padding(.bottom, 8)
+    }
+    }
     .background(LatticewakeDesign.background.opacity(0.96))
     .overlay(alignment: .bottom) { Divider().opacity(0.45) }
   }
@@ -194,6 +207,7 @@ struct StageMacroRail: View {
   let commit: () -> Void
 
   var body: some View {
+    ScrollView(.horizontal) {
     HStack(spacing: 8) {
       macro("Morph", value: $controls.surfaceMorph, range: 0...1, format: "%.0f%%", scale: 100)
       macro("Tone", value: $controls.tone, range: 0...1, format: "%.0f%%", scale: 100)
@@ -203,6 +217,7 @@ struct StageMacroRail: View {
       macro("Release", value: $controls.releaseSeconds, range: 0.001...2, format: "%.2fs")
       macro("Width", value: $controls.stereoMotion, range: 0...1, format: "%.0f%%", scale: 100)
     }
+    }.scrollIndicators(.automatic)
     .accessibilityElement(children: .contain)
     .accessibilityLabel("Terrain performance macros")
   }
@@ -211,15 +226,15 @@ struct StageMacroRail: View {
                      format: String, scale: Double = 1) -> some View {
     VStack(alignment: .leading, spacing: 4) {
       HStack(spacing: 4) {
-        Text(label).font(.caption2).foregroundStyle(.secondary)
+        Text(label).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
         Spacer(minLength: 2)
-        Text(String(format: format, value.wrappedValue * scale)).font(.caption2.monospaced())
+        Text(String(format: format, value.wrappedValue * scale)).font(.caption2.monospaced()).lineLimit(1)
       }
       Slider(value: value, in: range) { editing in if !editing { commit() } }
         .controlSize(.mini).tint(LatticewakeDesign.cyan)
     }
     .padding(.horizontal, 8).padding(.vertical, 7)
-    .frame(maxWidth: .infinity)
+    .frame(width: 105)
     .background(Color.white.opacity(0.035), in: RoundedRectangle(cornerRadius: 9))
   }
 }
@@ -235,6 +250,7 @@ struct StageLaneStrip: View {
   let toggleSolo: (Int) -> Void
 
   var body: some View {
+    ScrollView(.horizontal) {
     HStack(spacing: 8) {
       ForEach(roles) { role in
         let color = LatticewakeDesign.laneColors[role.id % LatticewakeDesign.laneColors.count]
@@ -274,10 +290,12 @@ struct StageLaneStrip: View {
           }
         }
         .padding(9)
+        .frame(minWidth: 150)
         .background(color.opacity(sounding ? 0.12 : 0.035), in: RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3).clipShape(Capsule()) }
       }
     }
+    }.scrollIndicators(.automatic)
   }
 
   private func performanceButton(_ label: String, accessibilityLabel: String,
