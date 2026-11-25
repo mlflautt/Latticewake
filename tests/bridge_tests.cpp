@@ -360,6 +360,7 @@ void testPreparedRoleTransportAndSourceOwnership() {
   LWRoleStatus playing{};
   assert(lw_kernel_role_status(kernel, &playing) == 1);
   assert(playing.running == 1U && playing.active_lanes == 4U && playing.loop_frames == ready.loop_frames);
+  assert(lw_kernel_role_gate_mask(kernel) == 0xFU);
   double roleEnergy = 0;
   for(const float sample: output) roleEnergy += std::abs(sample);
   assert(roleEnergy > 0.01);
@@ -371,6 +372,37 @@ void testPreparedRoleTransportAndSourceOwnership() {
   LWRoleStatus stopped{};
   assert(lw_kernel_role_status(kernel, &stopped) == 1);
   assert(stopped.running == 0U && stopped.active_lanes == 0U);
+  assert(lw_kernel_role_gate_mask(kernel) == 0U);
+  lw_kernel_destroy(kernel);
+}
+
+void testRoleGateMaskIsPerLane() {
+  std::string scene(kCanonicalScene);
+  for (const unsigned int lane : {0U, 1U, 3U}) {
+    LWRoleControl control{};
+    assert(lw_scene_role_control(scene.c_str(), lane, &control) == 1);
+    control.enabled = 0;
+    char* updated = nullptr;
+    assert(lw_scene_apply_role_control(scene.c_str(), lane, &control, &updated) == 1);
+    scene = updated;
+    lw_string_destroy(updated);
+  }
+  LWKernelRef* const kernel = lw_kernel_create();
+  assert(kernel && lw_kernel_prepare_scene_json(kernel, scene.c_str(), 8000.0) == 1);
+  assert(lw_kernel_role_gate_mask(kernel) == 0U);
+  lw_kernel_set_roles_running(kernel, 1);
+  std::array<float, 256> output{};
+  bool observed = false;
+  for (unsigned int block = 0; block < 125; ++block) {
+    assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+    const auto mask = lw_kernel_role_gate_mask(kernel);
+    assert((mask & ~4U) == 0U);
+    observed = observed || mask == 4U;
+  }
+  assert(observed);
+  assert(lw_kernel_panic(kernel) == 1);
+  assert(lw_kernel_render(kernel, output.data(), static_cast<unsigned int>(output.size())) == 1);
+  assert(lw_kernel_role_gate_mask(kernel) == 0U);
   lw_kernel_destroy(kernel);
 }
 
@@ -493,6 +525,7 @@ int main() {
   testRoleControlCanonicalBoundary();
   testRolePreviewBoundary();
   testPreparedRoleTransportAndSourceOwnership();
+  testRoleGateMaskIsPerLane();
   testRolePlanPublishesExactlyAtLoopBoundary();
   testCallbackRouteStressAndBounds();
   return 0;

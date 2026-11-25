@@ -79,6 +79,7 @@ struct LWKernelRef {
   std::atomic<bool> roleStartRequested{false};
   std::atomic<bool> roleStopRequested{false};
   std::atomic<std::uint32_t> activeRoleLanes{0};
+  std::atomic<std::uint32_t> roleGateMask{0};
   std::atomic<std::uint64_t> roleSampleOffset{0};
   bool roleBoundaryReleaseRequested{};
   std::array<int, 4> activeRoleNotes{{-1,-1,-1,-1}};
@@ -118,6 +119,7 @@ static int prepareInitial(LWKernelRef* kernel,const latticewake::Scene& scene,co
   kernel->roleStartRequested.store(false,std::memory_order_release);
   kernel->roleStopRequested.store(false,std::memory_order_release);
   kernel->activeRoleLanes.store(0,std::memory_order_release);
+  kernel->roleGateMask.store(0,std::memory_order_release);
   kernel->roleSampleOffset=0; kernel->roleBoundaryReleaseRequested=false; kernel->activeRoleNotes={{-1,-1,-1,-1}};
   return 1;
 }
@@ -178,6 +180,7 @@ static int prepareInitialDocument(LWKernelRef* kernel, const char* json, const d
   kernel->roleStartRequested.store(false,std::memory_order_release);
   kernel->roleStopRequested.store(false,std::memory_order_release);
   kernel->activeRoleLanes.store(0,std::memory_order_release);
+  kernel->roleGateMask.store(0,std::memory_order_release);
   kernel->roleSampleOffset=0; kernel->roleBoundaryReleaseRequested=false; kernel->activeRoleNotes={{-1,-1,-1,-1}};
   return 1;
 }
@@ -490,6 +493,9 @@ int lw_kernel_role_status(const LWKernelRef* k,LWRoleStatus* status) {
            pending==kNoPlan?0U:k->rolePlans[pending].generation.load(std::memory_order_acquire)};
   return 1;
 }
+unsigned int lw_kernel_role_gate_mask(const LWKernelRef* k) {
+  return k ? k->roleGateMask.load(std::memory_order_acquire) : 0U;
+}
 static int renderKernel(LWKernelRef* k,float* out,float* right,unsigned int frames) {
   if(!k||!out)return 0;
   if(frames==0||frames>kMaximumCallbackFrames) { k->renderFailures.fetch_add(1,std::memory_order_relaxed); return 0; }
@@ -504,6 +510,7 @@ static int renderKernel(LWKernelRef* k,float* out,float* right,unsigned int fram
     k->roleStopRequested.store(false,std::memory_order_release);
     k->activeRoleNotes={{-1,-1,-1,-1}};
     k->activeRoleLanes.store(0,std::memory_order_release);
+    k->roleGateMask.store(0,std::memory_order_release);
     k->roleBoundaryReleaseRequested=false;
   }
   const std::uint32_t pending=k->pendingPlan.load(std::memory_order_acquire);
@@ -604,9 +611,12 @@ static int renderKernel(LWKernelRef* k,float* out,float* right,unsigned int fram
     peak=std::max(peak,std::fabs(out[i]));
     if(right) peak=std::max(peak,std::fabs(right[i]));
   }
-  std::uint32_t activeLanes=0;
-  for(const int note:k->activeRoleNotes) if(note>=0) ++activeLanes;
+  std::uint32_t activeLanes=0, gateMask=0;
+  for(std::size_t lane=0;lane<k->activeRoleNotes.size();++lane) {
+    if(k->activeRoleNotes[lane]>=0) { ++activeLanes; gateMask |= (1U << lane); }
+  }
   k->activeRoleLanes.store(activeLanes,std::memory_order_release);
+  k->roleGateMask.store(gateMask,std::memory_order_release);
   k->outputPeak.store(peak,std::memory_order_relaxed);
   const auto elapsed=static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-started).count());
   updateMaximum(k->maximumRenderNanoseconds,elapsed);
@@ -653,6 +663,7 @@ void lw_kernel_reset(LWKernelRef* k) {
   k->roleStopRequested.store(false,std::memory_order_release);
   k->activeRoleNotes={{-1,-1,-1,-1}};
   k->activeRoleLanes.store(0,std::memory_order_release);
+  k->roleGateMask.store(0,std::memory_order_release);
   k->roleSampleOffset=0;
   k->roleBoundaryReleaseRequested=false;
 }

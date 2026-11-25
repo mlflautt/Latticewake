@@ -213,7 +213,7 @@ struct ContentView: View {
               }
 
               StageLaneStrip(roles: roles, performanceMask: rolePerformanceMask,
-                             activeLaneCount: audio.activeRoleLanes, running: audio.rolesRunning,
+                             roleGateMask: audio.roleGateMask, running: audio.rolesRunning,
                              changesPending: audio.roleChangesPending,
                              selectLane: { _ in
                                inspectorPage = .lanes; inspectorOpen = true

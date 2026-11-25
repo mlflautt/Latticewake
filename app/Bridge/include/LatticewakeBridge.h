@@ -16,6 +16,9 @@ typedef struct LWSurfaceField {
 int lw_scene_prepared_flat(const char* json, double sample_rate,
                            const LWSurfaceField fields[2], unsigned int* flat);
 float lw_kernel_output_peak(const LWKernelRef* kernel);
+/* Bit n indicates an outstanding scheduled note gate for role n at the end
+   of the most recently rendered block. This is not an audio-level meter. */
+unsigned int lw_kernel_role_gate_mask(const LWKernelRef* kernel);
 typedef struct LWKernelStatus {
   unsigned int pending_events;
   unsigned int dropped_events;

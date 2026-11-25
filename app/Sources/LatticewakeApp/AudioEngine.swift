@@ -104,6 +104,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   @Published private(set) var outputPeak: Double = 0
   @Published private(set) var rolesRunning = false
   @Published private(set) var activeRoleLanes = 0
+  @Published private(set) var roleGateMask: UInt32 = 0
   @Published private(set) var roleChangesPending = false
   @Published private(set) var roleLoopProgress = 0.0
   @Published private(set) var activeRolePlanGeneration: UInt64 = 0
@@ -121,6 +122,8 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
         let nextActiveLanes = Int(status.activeLanes)
         if rolesRunning != nextRolesRunning { rolesRunning = nextRolesRunning }
         if activeRoleLanes != nextActiveLanes { activeRoleLanes = nextActiveLanes }
+        let nextGateMask = lw_kernel_role_gate_mask(kernel)
+        if roleGateMask != nextGateMask { roleGateMask = nextGateMask }
         let nextPending = status.pendingChanges != 0
         if roleChangesPending != nextPending { roleChangesPending = nextPending }
         let nextProgress = status.loopFrames == 0 ? 0 : Double(status.sampleOffset) / Double(status.loopFrames)
@@ -238,6 +241,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
     running = false
     rolesRunning = false
     activeRoleLanes = 0
+    roleGateMask = 0
     roleChangesPending = false
     roleLoopProgress = 0
     activeRolePlanGeneration = 0
@@ -257,7 +261,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   func panic() -> Bool {
     guard let kernel else { return false }
     let accepted = lw_kernel_panic(kernel) != 0
-    if accepted { rolesRunning = false; activeRoleLanes = 0 }
+    if accepted { rolesRunning = false; activeRoleLanes = 0; roleGateMask = 0 }
     return accepted
   }
   func startRoles() { if let kernel { lw_kernel_set_roles_running(kernel, 1); rolesRunning = true } }

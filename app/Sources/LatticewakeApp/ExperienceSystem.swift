@@ -242,7 +242,7 @@ struct StageMacroRail: View {
 struct StageLaneStrip: View {
   let roles: [RoleControl]
   let performanceMask: RolePerformanceMask
-  let activeLaneCount: Int
+  let roleGateMask: UInt32
   let running: Bool
   let changesPending: Bool
   let selectLane: (Int) -> Void
@@ -254,15 +254,15 @@ struct StageLaneStrip: View {
     HStack(spacing: 8) {
       ForEach(roles) { role in
         let color = LatticewakeDesign.laneColors[role.id % LatticewakeDesign.laneColors.count]
-        let sounding = running && role.enabled && !performanceMask.muted.contains(role.id) && activeLaneCount > 0
+        let gateActive = running && role.id >= 0 && role.id < 4 && (roleGateMask & (UInt32(1) << role.id)) != 0
         VStack(alignment: .leading, spacing: 6) {
           Button { selectLane(role.id) } label: {
             VStack(alignment: .leading, spacing: 6) {
               HStack(spacing: 6) {
-                Circle().fill(sounding ? color : .secondary.opacity(0.45)).frame(width: 7, height: 7)
+                Circle().fill(gateActive ? color : .secondary.opacity(0.45)).frame(width: 7, height: 7)
                 Text(RoleControl.names[role.id]).font(.caption.weight(.semibold))
                 Spacer()
-                Text(changesPending ? "QUEUED" : (sounding ? "SOUNDING" : (role.enabled ? "ARMED" : "OFF")))
+                Text(changesPending ? "QUEUED" : (gateActive ? "NOTE ON" : (role.enabled ? "ARMED" : "OFF")))
                   .font(.caption2.monospaced()).foregroundStyle(changesPending ? LatticewakeDesign.amber : color)
               }
               HStack(spacing: 3) {
@@ -274,7 +274,7 @@ struct StageLaneStrip: View {
             }
           }
           .buttonStyle(.plain)
-          .accessibilityLabel("Open \(RoleControl.names[role.id]) lane, \(sounding ? "sounding" : (role.enabled ? "armed" : "off"))")
+          .accessibilityLabel("Open \(RoleControl.names[role.id]) lane, \(gateActive ? "note on" : (role.enabled ? "armed" : "off"))")
           HStack {
             Text(RoleControl.patterns(for: role.id)[min(role.pattern, RoleControl.patterns(for: role.id).count - 1)])
               .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
@@ -291,7 +291,7 @@ struct StageLaneStrip: View {
         }
         .padding(9)
         .frame(minWidth: 150)
-        .background(color.opacity(sounding ? 0.12 : 0.035), in: RoundedRectangle(cornerRadius: 10))
+        .background(color.opacity(gateActive ? 0.12 : 0.035), in: RoundedRectangle(cornerRadius: 10))
         .overlay(alignment: .leading) { Rectangle().fill(color).frame(width: 3).clipShape(Capsule()) }
       }
     }

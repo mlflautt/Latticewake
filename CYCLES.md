@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 067 — per-lane note-gate indicators
+
+- Scope: publish each generated lane's tracked note-gate state to the Stage;
+  see `handoffs/cycle-067.md`.
+
 ### Cycle 066 — reproducible image-scene capture
 
 - Scope: protect repeated captures and verify saved image scenes reproduce
