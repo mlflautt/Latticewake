@@ -107,6 +107,9 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
   @Published private(set) var roleChangesPending = false
   @Published private(set) var roleLoopProgress = 0.0
   @Published private(set) var activeRolePlanGeneration: UInt64 = 0
+  // Describes the most recently prepared scene at neutral expression. A live
+  // publication may still be waiting for the callback to adopt it.
+  @Published private(set) var preparedTerrainFlat: Bool?
   func refreshMeter() {
     guard let kernel else { return }
     let peak = Double(lw_kernel_output_peak(kernel))
@@ -140,6 +143,7 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
 
   func setScene(bytes: Data) throws {
     guard let text = String(data: bytes, encoding: .utf8) else { throw NSError(domain: "Latticewake", code: 3) }
+    let flat = preparedFlat(text)
     if running, let kernel {
       let sampleRate = engine.mainMixerNode.outputFormat(forBus: 0).sampleRate
       guard prepareOrPublish(text, kernel: kernel, rate: sampleRate, publish: true) else {
@@ -148,6 +152,27 @@ private nonisolated func makeCallbackSourceNode(_ state: CallbackRenderState) ->
       roleChangesPending = true
     }
     sceneJSON = text
+    preparedTerrainFlat = flat
+  }
+
+  private func preparedFlat(_ json: String) -> Bool? {
+    let root = (try? JSONSerialization.jsonObject(with: Data(json.utf8))) as? [String: Any]
+    let surface = root?["surface"] as? [String: Any]
+    let layers = surface?["layers"] as? [[String: Any]]
+    var flat: UInt32 = 0
+    guard let layers, layers.count == 2 else {
+      return json.withCString { lw_scene_prepared_flat($0, 48000, nil, &flat) } != 0 ? flat != 0 : nil
+    }
+    let hashes = layers.map { ($0["sourceType"] as? String) == "image" ? $0["assetHash"] as? String : nil }
+    let samples = hashes.map { hash -> [UInt16]? in
+      guard let hash, let asset = surfaceAssets[hash] else { return nil }
+      return try? asset.samples()
+    }
+    guard zip(hashes, samples).allSatisfy({ $0.0 == nil || $0.1 != nil }) else { return nil }
+    let ok = withFieldPointer(samples, hashes: hashes) { fields in
+      json.withCString { lw_scene_prepared_flat($0, 48000, fields, &flat) }
+    }
+    return ok != 0 ? flat != 0 : nil
   }
 
   func queueRoleSceneAtLoop(bytes: Data) throws {

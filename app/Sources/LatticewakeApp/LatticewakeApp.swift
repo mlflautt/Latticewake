@@ -186,7 +186,7 @@ struct ContentView: View {
                   .padding(12).frame(maxHeight: .infinity, alignment: .center)
                 }
                 if terrainIsFlat {
-                  Label("This path produces no sustained tone", systemImage: "exclamationmark.triangle")
+                  Label("Prepared path is flat at neutral expression", systemImage: "exclamationmark.triangle")
                     .font(.caption).foregroundStyle(LatticewakeDesign.amber).padding(7)
                     .background(.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 7))
                     .padding(12).offset(y: previewActive ? 38 : 0)
@@ -461,14 +461,7 @@ struct ContentView: View {
   }
 
   private var terrainIsFlat: Bool {
-    if surfacePresentation.layers.contains(where: { $0.kind == .image }) {
-      // The image tables are normalized independently before mixing. A raw
-      // brightness estimate cannot establish whether the prepared mix is flat.
-      return false
-    }
-    guard !terrain.snapshot.points.isEmpty else { return false }
-    return (terrain.snapshot.points.map(\.value).max() ?? 0) -
-      (terrain.snapshot.points.map(\.value).min() ?? 0) < 0.000001
+    audio.preparedTerrainFlat == true
   }
 
   private func toggleAudio() {

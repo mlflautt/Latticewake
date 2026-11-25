@@ -151,6 +151,15 @@ static std::optional<std::array<latticewake::SurfaceFieldView, 2>> surfaceFieldV
   return views;
 }
 
+int lw_scene_prepared_flat(const char* json, double rate, const LWSurfaceField fields[2], unsigned int* flat) {
+  if (!flat) return 0;
+  const auto views = fields ? surfaceFieldViews(fields) : std::nullopt;
+  latticewake::RenderPlan plan;
+  if ((fields && !views) || !buildSceneDocumentPlan(json, rate, plan, views ? &*views : nullptr)) return 0;
+  *flat = plan.diagnostic == latticewake::TraversalDiagnostic::flat ? 1U : 0U;
+  return 1;
+}
+
 static int prepareInitialDocument(LWKernelRef* kernel, const char* json, const double rate,
                                   const LWSurfaceField fields[2] = nullptr) {
   const auto views = fields ? surfaceFieldViews(fields) : std::nullopt;

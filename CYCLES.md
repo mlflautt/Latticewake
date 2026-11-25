@@ -15,6 +15,11 @@ heard, approved, or preferred.
 
 ## Completed
 
+### Cycle 063 — prepared terrain diagnostic
+
+- Scope: use the portable prepared tables for the neutral flat-path diagnostic,
+  including embedded image fields; see `handoffs/cycle-063.md`.
+
 ### Cycle 062 — prepared terrain diagnostic correction
 
 - Scope: correct the mixed-table range calculation, avoid reporting raw image

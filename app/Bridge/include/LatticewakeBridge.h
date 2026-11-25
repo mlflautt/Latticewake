@@ -11,6 +11,10 @@ typedef struct LWSurfaceField {
   unsigned int height;
   const char* content_hash;
 } LWSurfaceField;
+/* Off-thread preparation diagnostic for the scene's neutral morph. Returns 1
+   on success; flat is 1 only when the prepared mix has negligible variation. */
+int lw_scene_prepared_flat(const char* json, double sample_rate,
+                           const LWSurfaceField fields[2], unsigned int* flat);
 float lw_kernel_output_peak(const LWKernelRef* kernel);
 typedef struct LWKernelStatus {
   unsigned int pending_events;

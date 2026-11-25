@@ -252,6 +252,11 @@ void testImageSurfaceFieldCAbi() {
   LWKernelRef* const analyticKernel = lw_kernel_create();
   assert(imageKernel && analyticKernel);
   assert(lw_kernel_prepare_scene_json_with_fields(imageKernel, imageScene.c_str(), 48000.0, fields) == 1);
+  unsigned int flat = 99;
+  assert(lw_scene_prepared_flat(imageScene.c_str(), 48000.0, fields, &flat) == 1);
+  assert(flat == 0);
+  assert(lw_scene_prepared_flat("not a scene", 48000.0, fields, &flat) == 0);
+  assert(lw_scene_prepared_flat(imageScene.c_str(), 48000.0, fields, nullptr) == 0);
   assert(lw_kernel_prepare_scene_json(analyticKernel, kCanonicalScene, 48000.0) == 1);
   samples.fill(0); // Prepared plan must own its tables, not retain this host buffer.
   std::array<float, 512> imageOutput{};

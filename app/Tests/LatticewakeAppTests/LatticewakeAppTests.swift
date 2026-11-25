@@ -8,6 +8,27 @@ import LatticewakeBridge
 @testable import LatticewakeApp
 
 final class LatticewakeAppTests: XCTestCase {
+  @MainActor func testPreparedDiagnosticWorksBeforeAudioStarts() throws {
+    let audio = LatticewakeAudio()
+    XCTAssertNil(audio.preparedTerrainFlat)
+    try audio.setScene(bytes: Data(DemoScene.gestureJSON.utf8))
+    XCTAssertNotNil(audio.preparedTerrainFlat)
+    XCTAssertFalse(audio.running)
+  }
+  @MainActor func testPreparedDiagnosticUsesImageFieldAndRejectsMissingAsset() throws {
+    let field = Data([0x4c, 0x57, 0x53, 0x46, 0x00, 0x01, 0x00, 0x02, 0x00, 0x02,
+                      0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00])
+    let asset = try ImageTerrainAsset(sourceSHA256: String(repeating: "a", count: 64),
+                                      fieldBytes: field, sourcePreviewPNG: Data())
+    let scene = try SurfaceSceneBridge.replacingLayer(0, with: asset, in: Data(DemoScene.gestureJSON.utf8))
+    let audio = LatticewakeAudio()
+    audio.registerSurfaceAssets([asset.id: asset])
+    try audio.setScene(bytes: scene)
+    XCTAssertEqual(audio.preparedTerrainFlat, true)
+    audio.registerSurfaceAssets([:])
+    try audio.setScene(bytes: scene)
+    XCTAssertNil(audio.preparedTerrainFlat)
+  }
   func testKeyboardRepeatAndFocusRelease() {
   var keys = KeyboardState()
   let first = keys.down(60)
