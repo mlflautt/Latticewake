@@ -109,7 +109,7 @@ The intended product architecture and bounded agent boundary are in
 [the product architecture](docs/PRODUCT_ARCHITECTURE.md).
 Development advances in committed, reviewable increments; see
 [`CYCLES.md`](CYCLES.md) for the cycle protocol and next bounded options.
-The historical architecture sequence is [Roadmap v3](docs/DEVELOPMENT_ROADMAP_V3.md).
-The active path from the Cycle 056 prototype to a beautiful standalone and an
-initial dependable AUv3 is
-[Productization Roadmap v4](docs/PRODUCTIZATION_ROADMAP_V4.md).
+The historical architecture sequence is [Roadmap v3](docs/DEVELOPMENT_ROADMAP_V3.md)
+and [Productization Roadmap v4](docs/PRODUCTIZATION_ROADMAP_V4.md).
+The active sequence after Cycle 068 is [Roadmap v5](docs/DEVELOPMENT_ROADMAP_V5.md),
+with the new [instrument design research assessment](research/INSTRUMENT_DESIGN_RESEARCH_SYNTHESIS.md).

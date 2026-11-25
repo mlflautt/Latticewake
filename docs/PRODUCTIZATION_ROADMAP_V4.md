@@ -1,5 +1,9 @@
 # Latticewake productization roadmap v4
 
+> Historical roadmap. The active post-Cycle-068 sequence is
+> [Roadmap v5](DEVELOPMENT_ROADMAP_V5.md); completed cycle numbers in this
+> document are planning-era labels and do not imply AUv3 was shipped.
+
 ## Purpose
 
 This roadmap turns the technically credible standalone prototype into a

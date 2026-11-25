@@ -1,5 +1,9 @@
 # Latticewake product architecture
 
+> For current delivery priorities and the assessed dual-timescale terrain
+> direction, see [Roadmap v5](DEVELOPMENT_ROADMAP_V5.md) and the
+> [research synthesis](../research/INSTRUMENT_DESIGN_RESEARCH_SYNTHESIS.md).
+
 Latticewake is a terrain-centered expressive synthesis instrument for artists:
 a playable standalone macOS instrument first, and an AUv3 companion only after
 the standalone real-time lifecycle is proven. It is not a DAW and will not host
